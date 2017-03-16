@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 
 from __future__ import absolute_import
 
@@ -10,10 +18,18 @@ from aiida.common.exceptions import (
     )
 
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__authors__ = "The AiiDA team."
-__version__ = "0.7.1"
+
+
+
+def QueryFactory():
+    if settings.BACKEND == BACKEND_SQLA:
+        from aiida.backends.sqlalchemy.queries import QueryManagerSQLA as QueryManager
+    elif settings.BACKEND == BACKEND_DJANGO:
+        from aiida.backends.djsite.queries import QueryManagerDjango as QueryManager
+    else:
+        raise ConfigurationError("Invalid settings.BACKEND: {}".format(
+            settings.BACKEND))
+    return QueryManager
 
 
 def is_dbenv_loaded():
@@ -270,4 +286,21 @@ def get_current_profile():
     else:
         return None
 
+
+def _get_column(colname, alias):
+    """
+    Return the column for a given projection. Needed by the QueryBuilder
+    """
+
+    try:
+        return getattr(alias, colname)
+    except:
+        raise InputValidationError(
+            "\n{} is not a column of {}\n"
+            "Valid columns are:\n"
+            "{}".format(
+                    colname, alias,
+                    '\n'.join(alias._sa_class_manager.mapper.c.keys())
+                )
+        )
 

@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 from __future__ import absolute_import
 
 import copy
@@ -25,17 +33,14 @@ from aiida.common.lang import override
 from aiida.orm.implementation.general.node import AbstractNode, _NO_DEFAULT
 from aiida.orm.implementation.sqlalchemy.computer import Computer
 from aiida.orm.implementation.sqlalchemy.group import Group
-from aiida.orm.implementation.sqlalchemy.utils import django_filter, get_attr
+from aiida.orm.implementation.sqlalchemy.utils import django_filter, \
+    get_attr, get_db_columns
 from aiida.orm.mixins import Sealable
 
 import aiida.backends.sqlalchemy
 
 import aiida.orm.autogroup
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__authors__ = "The AiiDA team."
-__version__ = "0.7.1"
 
 
 class Node(AbstractNode):
@@ -120,7 +125,12 @@ class Node(AbstractNode):
     def get_subclass_from_pk(cls, pk):
         from aiida.orm.querybuilder import QueryBuilder
         from sqlalchemy.exc import DatabaseError
-        if not isinstance(pk, int):
+        # If it is not an int make a final attempt
+        # to convert to an integer. If you fail,
+        # raise an exception.
+        try:
+            pk = int(pk)
+        except:
             raise ValueError("Incorrect type for int")
 
         try:
@@ -749,15 +759,11 @@ class Node(AbstractNode):
 
     @property
     def has_children(self):
-        #~ from aiida.backends.sqlalchemy.model.node import DbNode
-        return self.dbnode.outputs_q.all()
-        #~ return session.query(literal(True)).filter(
-            #~ self.dbnode.child_paths.exists()).scalar() or False
+        return self.dbnode.children_q.first() is not None
 
     @property
     def has_parents(self):
-        return session.query(literal(True)).filter(
-            self.dbnode.parent_paths.exists()).scalar() or False
+        return self.dbnode.parents_q.first() is not None
 
     @property
     def uuid(self):

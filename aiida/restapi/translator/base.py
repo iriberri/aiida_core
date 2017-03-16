@@ -1,14 +1,21 @@
-from aiida.common.exceptions import InputValidationError, InvalidOperation, ConfigurationError
-#from aiida.restapi.caching import cache
-#from aiida.restapi.common.config import CACHING_TIMEOUTS
+# -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
+from aiida.backends.profile import BACKEND_DJANGO, BACKEND_SQLA
+from aiida.backends.settings import BACKEND
+from aiida.common.exceptions import InputValidationError, InvalidOperation, \
+    ConfigurationError
+from aiida.common.utils import get_object_from_string, issingular
 from aiida.orm.querybuilder import QueryBuilder
 from aiida.restapi.common.exceptions import RestValidationError, \
     RestInputValidationError
 from aiida.restapi.common.utils import pk_dbsynonym
-from aiida.restapi.common.config import LIMIT_DEFAULT, custom_schema
-from aiida.common.utils import get_object_from_string, issingular
-from aiida.backends.settings import BACKEND
-from aiida.backends.profile import BACKEND_DJANGO, BACKEND_SQLA
 
 
 class BaseTranslator(object):
@@ -32,12 +39,35 @@ class BaseTranslator(object):
     _is_pk_query = None
     _total_count = None
 
-
-    def __init__(self):
+    def __init__(self, Class=None, **kwargs):
         """
         Initialise the parameters.
         Create the basic query_help
+
+        keyword Class (default None but becomes this class): is the class
+        from which one takes the initial values of the attributes. By default
+        is this class so that class atributes are  translated into object
+        attributes. In case of inheritance one cane use the
+        same constructore but pass the inheriting class to pass its attributes.
         """
+
+        # Assume default class is this class (cannot be done in the
+        # definition as it requires self)
+        if Class is None:
+            Class = self.__class__
+
+        # Assign class parameters to the object
+        self.__label__ = Class.__label__
+        self._aiida_type = Class._aiida_type
+        self._qb_type = Class._qb_type
+        self._result_type = Class.__label__
+
+        self._default = Class._default
+        self._default_projections = Class._default_projections
+        self._is_qb_initialized = Class._is_qb_initialized
+        self._is_pk_query = Class._is_pk_query
+        self._total_count = Class._total_count
+
         # basic query_help object
         self._query_help = {
             "path": [{
@@ -51,6 +81,13 @@ class BaseTranslator(object):
         # query_builder object (No initialization)
         self.qb = QueryBuilder()
 
+        self.LIMIT_DEFAULT = kwargs['LIMIT_DEFAULT']
+
+        if 'custom_schema' in kwargs:
+            self.custom_schema = kwargs['custom_schema']
+        else:
+            self.custom_schema = None
+
     def __repr__(self):
         """
         This function is required for the caching system to be able to compare
@@ -62,29 +99,29 @@ class BaseTranslator(object):
         """
         return ""
 
-    @classmethod
-    def get_schema(cls):
+    def get_schema(self):
 
         # Construct the full class string
-        class_string = 'aiida.orm.' + cls._aiida_type
+        class_string = 'aiida.orm.' + self._aiida_type
 
         # Load correspondent orm class
         orm_class = get_object_from_string(class_string)
 
-        # Construct the json object to return it
+        # Construct the json object to be returned
         basic_schema = orm_class.get_db_columns()
 
-        if cls._default_projections == ['**']:
-            schema = basic_schema # No custom schema, take the basic one
+        if self._default_projections == ['**']:
+            schema = basic_schema  # No custom schema, take the basic one
         else:
-            schema = dict([(k, basic_schema[k]) for k in cls._default_projections
-                                  if k in basic_schema.keys()])
+            schema = dict([(k, basic_schema[k]) for k in
+                           self._default_projections
+                           if k in basic_schema.keys()])
 
         # Convert the related_tablevalues to the RESTAPI resources
         # (orm class/db table ==> RESTapi resource)
         def table2resource(table_name):
             # TODO Consider ways to make this function backend independent (one
-            # idea would be to gro from table name to aiida class name which is
+            # idea would be to go from table name to aiida class name which is
             # univoque)
             if BACKEND == BACKEND_DJANGO:
                 (spam, resource_name) = issingular(table_name[2:].lower())
@@ -102,12 +139,12 @@ class BaseTranslator(object):
         for k, v in schema.iteritems():
 
             # Add custom fields to the column dictionaries
-            if 'fields' in custom_schema:
-                if k in custom_schema['fields'].keys():
-                    schema[k].update(custom_schema['fields'][k])
+            if 'fields' in self.custom_schema:
+                if k in self.custom_schema['fields'].keys():
+                    schema[k].update(self.custom_schema['fields'][k])
 
             # Convert python types values into strings
-            schema[k]['type']=str(schema[k]['type'])[7:-2]
+            schema[k]['type'] = str(schema[k]['type'])[7:-2]
 
             # Construct the 'related resource' field from the 'related_table'
             # field
@@ -145,7 +182,7 @@ class BaseTranslator(object):
             #     return cache.memoize()
             #
 
-        #    @cache.memoize(timeout=CACHING_TIMEOUTS[self.__label__])
+            #    @cache.memoize(timeout=CACHING_TIMEOUTS[self.__label__])
 
     def get_total_count(self):
         """
@@ -338,11 +375,11 @@ class BaseTranslator(object):
                 limit = int(limit)
             except ValueError:
                 raise InputValidationError("Limit value must be an integer")
-            if limit > LIMIT_DEFAULT:
+            if limit > self.LIMIT_DEFAULT:
                 raise RestValidationError("Limit and perpage cannot be bigger "
-                                          "than {}".format(LIMIT_DEFAULT))
+                                          "than {}".format(self.LIMIT_DEFAULT))
         else:
-            limit = LIMIT_DEFAULT
+            limit = self.LIMIT_DEFAULT
 
         if offset is not None:
             try:
@@ -377,17 +414,8 @@ class BaseTranslator(object):
                                    "initialized.")
 
         results = []
-        from aiida.backends.settings import BACKEND
-
         if self._total_count > 0:
-            if BACKEND == "django":
-                from django.db import transaction
-                with transaction.atomic():
-                    for tmp in self.qb.iterdict():
-                        results.append(tmp[label])
-            elif BACKEND == "sqlalchemy":
-                for tmp in self.qb.iterdict():
-                    results.append(tmp[label])
+            results = [res[label] for res in self.qb.dict()]
 
         # TODO think how to make it less hardcoded
         if self._result_type == 'input_of':

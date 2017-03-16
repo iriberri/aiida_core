@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 
 from sqlalchemy import ForeignKey, select, func, join, and_
 from sqlalchemy.orm import (
@@ -23,10 +31,6 @@ from aiida.common.pluginloader import load_plugin
 from aiida.common.exceptions import DbContentError, MissingPluginError
 from aiida.common.datastructures import calc_states
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__authors__ = "The AiiDA team."
-__version__ = "0.7.1"
 
 
 class DbNode(Base):
@@ -47,7 +51,6 @@ class DbNode(Base):
     attributes = Column(JSONB)
     extras = Column(JSONB)
 
-
     dbcomputer_id = Column(
         Integer,
         ForeignKey('db_dbcomputer.id', deferrable=True, initially="DEFERRED", ondelete="RESTRICT"),
@@ -62,13 +65,6 @@ class DbNode(Base):
         ),
         nullable=False
     )
-    # user_id = Column(
-    #     Integer,
-    #     ForeignKey(
-    #         'db_dbuser.id', deferrable=True, initially="DEFERRED", ondelete="cascade"
-    #     ),
-    #     nullable=False
-    # )
 
     # TODO SP: The 'passive_deletes=all' argument here means that SQLAlchemy
     # won't take care of automatic deleting in the DbLink table. This still
@@ -80,35 +76,51 @@ class DbNode(Base):
 
     dbcomputer = relationship(
         'DbComputer',
-        # backref=backref('dbnodes')
-        backref = backref('dbnodes', passive_deletes='all', cascade='merge')
+        backref=backref('dbnodes', passive_deletes='all', cascade='merge')
     )
 
     # User
     user = relationship(
         'DbUser',
-        # backref=backref('dbnodes'),
-        backref=backref('dbnodes', passive_deletes='all', cascade='merge')
+        backref=backref('dbnodes', passive_deletes='all', cascade='merge',)
     )
 
     # outputs via db_dblink table
-    outputs = relationship(
+    outputs_q = relationship(
         "DbNode", secondary="db_dblink",
         primaryjoin="DbNode.id == DbLink.input_id",
         secondaryjoin="DbNode.id == DbLink.output_id",
-        backref=backref("inputs", passive_deletes=True),
+        backref=backref("inputs_q", passive_deletes=True, lazy='dynamic'),
+        lazy='dynamic',
         passive_deletes=True
     )
 
+    @property
+    def outputs(self):
+        return self.outputs_q.all()
+
+    @property
+    def inputs(self):
+        return self.inputs_q.all()
+
     # children via db_dbpath
     # suggest change name to descendants
-    children = relationship(
+    children_q = relationship(
         "DbNode", secondary="db_dbpath",
         primaryjoin="DbNode.id == DbPath.parent_id",
         secondaryjoin="DbNode.id == DbPath.child_id",
-        backref=backref("parents", passive_deletes=True),
-        passive_deletes=True,
+        backref=backref("parents_q", passive_deletes=True, lazy='dynamic'),
+        lazy='dynamic',
+        passive_deletes=True
     )
+
+    @property
+    def children(self):
+        return self.children_q.all()
+
+    @property
+    def parents(self):
+        return self.parents_q.all()
 
     def __init__(self, *args, **kwargs):
         super(DbNode, self).__init__(*args, **kwargs)

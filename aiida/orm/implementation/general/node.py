@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 import os
@@ -12,10 +20,6 @@ from aiida.common.utils import combomethod
 from aiida.common.links import LinkType
 from aiida.common.pluginloader import get_query_type_string
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__version__ = "0.7.1"
-__authors__ = "The AiiDA team."
 
 
 _NO_DEFAULT = tuple()
@@ -77,6 +81,9 @@ class AbstractNode(object):
                     name, attrs['__module__']))
 
             return newcls
+
+    # This will be set by the metaclass call
+    _logger = None
 
     # Name to be used for the Repository section
     _section_name = 'node'
@@ -166,7 +173,7 @@ class AbstractNode(object):
         """
         Initialize the object Node.
 
-        :param optional uuid: if present, the Node with given uuid is
+        :param uuid: if present, the Node with given uuid is
           loaded from the database.
           (It is not possible to assign a uuid to a new Node.)
         """
@@ -176,6 +183,9 @@ class AbstractNode(object):
 
     @property
     def is_stored(self):
+        """
+        Return True if the node is stored, False otherwise.
+        """
         return not self._to_be_stored
 
     def __repr__(self):
@@ -268,10 +278,10 @@ class AbstractNode(object):
     def _set_internal(self, arguments, allow_hidden=False):
         """
         Works as self.set(), but takes a dictionary as the 'arguments' variable,
-        instead of reading it from the **kwargs; moreover, it allows to specify
+        instead of reading it from the ``kwargs``; moreover, it allows to specify
         allow_hidden to True. In this case, if a a key starts with and
-        underscore, as for instance "_state", it will not call
-        the function "set__state" but rather "_set_state".
+        underscore, as for instance ``_state``, it will not call
+        the function ``set__state`` but rather ``_set_state``.
         """
         for incomp in self._set_incompatibilities:
             if all(k in arguments.keys() for k in incomp):
@@ -318,6 +328,9 @@ class AbstractNode(object):
 
     @abstractmethod
     def _update_db_label_field(self, field_value):
+        """
+        Update the label field acting directly on the DB
+        """
         pass
 
     @property
@@ -340,6 +353,9 @@ class AbstractNode(object):
 
     @abstractmethod
     def _update_db_description_field(self, field_value):
+        """
+        Update the description of this node, acting directly at the DB level
+        """
         pass
 
     def _validate(self):
@@ -385,7 +401,7 @@ class AbstractNode(object):
         :param link_type: The type of link, must be one of the enum values
                           from :class:`~aiida.common.links.LinkType`
         """
-        assert src, "You must provide a valid Node to link"
+        assert src is not None, "You must provide a valid Node to link"
 
         # Check that the label does not already exist
 
@@ -437,6 +453,7 @@ class AbstractNode(object):
         """
         Replace an input link with the given label, or simply creates it
         if it does not exist.
+        
         :note: In subclasses, change only this. Moreover, remember to call
            the super() method in order to properly use the caching logic!
 
@@ -473,8 +490,9 @@ class AbstractNode(object):
     def _remove_link_from(self, label):
         """
         Remove from the DB the input link with the given label.
+
         :note: In subclasses, change only this. Moreover, remember to call
-           the super() method in order to properly use the caching logic!
+            the super() method in order to properly use the caching logic!
 
         :note: No error is raised if the link does not exist.
 
@@ -700,7 +718,7 @@ class AbstractNode(object):
         Get the attribute.
 
         :param key: name of the attribute
-        :param optional default: if no attribute key is found, returns default
+        :param default: if no attribute key is found, returns default
 
         :return: attribute value
 
@@ -714,7 +732,7 @@ class AbstractNode(object):
         Immediately sets an extra of a calculation, in the DB!
         No .store() to be called. Can be used *only* after saving.
 
-        :param string key: key name
+        :param key: key name
         :param value: key value
         :param exclusive: (default=False).
             If exclusive is True, it raises a UniquenessError if an Extra with
@@ -757,8 +775,8 @@ class AbstractNode(object):
         Since extras can be added only after storing the node, this
         function is meaningful to be called only after the .store() method.
 
-        :param str key: key name
-        :param optional value: if no attribute key is found, returns value
+        :param key: key name
+        :param value: if no attribute key is found, returns value
 
         :return: the key value
 
@@ -869,8 +887,9 @@ class AbstractNode(object):
     def _get_dbcomments(self, pk=None):
         """
         Return a sorted list of DbComment associated with the Node.
+
         :param pk: integer or list of integers. If it is specified, returns the
-                   comment values with desired pks. (pk refers to DbComment.pk)
+            comment values with desired pks. (pk refers to DbComment.pk)
         :return: the list of DbComment, sorted by pk.
         """
         pass
@@ -1001,7 +1020,7 @@ class AbstractNode(object):
         """
         Get the the list of files/directory in the repository of the object.
 
-        :param str,optional subfolder: get the list of a subfolder
+        :param subfolder: get the list of a subfolder
         :return: a list of strings.
         """
         return self._get_folder_pathsubfolder.get_subfolder(subfolder).get_content_list()

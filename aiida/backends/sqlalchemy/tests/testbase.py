@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 
 import functools
 import os
@@ -18,10 +26,6 @@ from aiida.common.setup import get_profile_config
 from aiida.common.utils import get_configured_user_email
 from aiida.orm.computer import Computer
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__authors__ = "The AiiDA team."
-__version__ = "0.7.0"
 
 # Querying for expired objects automatically doesn't seem to work.
 # That's why expire on commit=False resolves many issues of objects beeing
@@ -100,7 +104,7 @@ class SqlAlchemyTests(AiidaTestImplementation):
             self.computer = SqlAlchemyTests._create_computer()
             self.computer.store()
         else:
-            self.computer = has_computer
+            self.computer = Computer(dbcomputer=has_computer)
 
     @staticmethod
     def _create_computer(**kwargs):
@@ -125,7 +129,8 @@ class SqlAlchemyTests(AiidaTestImplementation):
 
     def clean_db(self):
         from aiida.backends.sqlalchemy.models.computer import DbComputer
-        from aiida.backends.sqlalchemy.models.workflow import DbWorkflow
+        from aiida.backends.sqlalchemy.models.workflow import DbWorkflow, table_workflowstep_calc, \
+            table_workflowstep_subworkflow, DbWorkflowStep, DbWorkflowData
         from aiida.backends.sqlalchemy.models.group import DbGroup
         from aiida.backends.sqlalchemy.models.node import DbLink
         from aiida.backends.sqlalchemy.models.node import DbNode
@@ -133,6 +138,12 @@ class SqlAlchemyTests(AiidaTestImplementation):
         from aiida.backends.sqlalchemy.models.user import DbUser
 
         # Delete the workflows
+        # Complicated way to make sure we 'unwind' all the relationships
+        # between workflows and their children.
+        self.test_session.connection().execute(table_workflowstep_calc.delete())
+        self.test_session.connection().execute(table_workflowstep_subworkflow.delete())
+        self.test_session.query(DbWorkflowData).delete()
+        self.test_session.query(DbWorkflowStep).delete()
         self.test_session.query(DbWorkflow).delete()
 
         # Empty the relationship dbgroup.dbnode

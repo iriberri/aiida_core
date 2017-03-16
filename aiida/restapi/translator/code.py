@@ -1,3 +1,12 @@
+# -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 
 from aiida.restapi.translator.node import NodeTranslator
 
@@ -74,73 +83,9 @@ class CodeTranslator(NodeTranslator):
 
     _result_type = __label__
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         """
         Initialise the parameters.
         Create the basic query_help
         """
-        # basic query_help object
-        super(CodeTranslator, self).__init__()
-
-#    def get_schema(self):
-#        return {
-#            "fields": {
-#                "ctime": {
-#                    "is_display": True,
-#                    "display_name": "Creation Time",
-#                    "help_text": "Created at",
-#                    "type": "datetime",
-#                },
-#                "dbcomputer": {
-#                    "is_display": False,
-#                    "display_name": "Computer",
-#                    "help_text": "Computer id on which job was submitted",
-#                    "type": "related",
-#                },
-#                "description": {
-#                    "is_display": False,
-#                    "display_name": "Description",
-#                    "help_text": "Short description on the code",
-#                    "type": "string",
-#                },
-#                "id": {
-#                    "is_display": True,
-#                    "display_name": "ID",
-#                    "help_text": "Code id",
-#                    "type": "integer",
-#                },
-#                "label": {
-#                    "is_display": True,
-#                    "display_name": "Label",
-#                    "help_text": "Code label",
-#                    "type": "string",
-#                },
-#                "mtime": {
-#                    "is_display": True,
-#                    "display_name": "Last modified Time",
-#                    "help_text": "Last modified datetime of the node",
-#                    "type": "datetime",
-#                },
-#                "type": {
-#                    "is_display": True,
-#                    "display_name": "Type",
-#                    "help_text": "Code type",
-#                    "type": "string",
-#                },
-#                "uuid": {
-#                    "is_display": False,
-#                    "display_name": "Unique ID",
-#                    "help_text": "Unique id of the code",
-#                    "type": "string",
-#                }
-#            },
-#            "ordering": [
-#                "id",
-#                "label",
-#                "type",
-#                "dbcomputer",
-#                "ctime",
-#                "mtime",
-#                "uuid"
-#            ],
-#        }
+        super(CodeTranslator, self).__init__(Class=self.__class__, **kwargs)

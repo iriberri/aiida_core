@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 """
 Command line commands for the main executable 'verdi' of aiida
 
@@ -43,12 +51,9 @@ from aiida.cmdline.commands.workflow import Workflow
 from aiida.cmdline.commands.work import Work
 from aiida.cmdline.commands.comment import Comment
 from aiida.cmdline.commands.shell import Shell
+from aiida.cmdline.commands.restapi import Restapi
 from aiida.cmdline import execname
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__version__ = "0.7.1"
-__authors__ = "The AiiDA team."
 
 
 class ProfileParsingException(AiidaException):
@@ -696,19 +701,20 @@ class Quicksetup(VerdiCommand):
         return dbinfo
 
     @click.command('quicksetup', context_settings=CONTEXT_SETTINGS)
-    @click.option('--email', prompt='Email Address (for publishing experiments)', type=str,
+    @click.option('--email', prompt='Email Address (will be used to identify your data when sharing)', type=str,
                   help='This email address will be associated with your data and will be exported along with it, should you choose to share any of your work')
     @click.option('--first-name', prompt='First Name', type=str)
     @click.option('--last-name', prompt='Last Name', type=str)
     @click.option('--institution', prompt='Institution', type=str)
-    @click.option('--backend', type=click.Choice([BACKEND_DJANGO,BACKEND_SQLA]), default=BACKEND_SQLA)
+    @click.option('--backend', type=click.Choice([BACKEND_DJANGO,BACKEND_SQLA]), default=BACKEND_DJANGO)
+    @click.option('--db-port', type=str)
     @click.option('--db-user', type=str)
     @click.option('--db-user-pw', type=str)
     @click.option('--db-name', type=str)
     @click.option('--profile', type=str)
     @click.option('--repo', type=str)
     @click.pass_obj
-    def _quicksetup_cmd(self, email, first_name, last_name, institution, backend, db_user, db_user_pw, db_name, profile, repo):
+    def _quicksetup_cmd(self, email, first_name, last_name, institution, backend, db_port, db_user, db_user_pw, db_name, profile, repo):
         '''setup a sane aiida configuration with as little interaction as possible.'''
         from aiida.common.setup import create_base_dirs, AIIDA_CONFIG_FOLDER
         create_base_dirs()
@@ -806,18 +812,25 @@ class Quicksetup(VerdiCommand):
         }
         setup(profile_name, only_config=False, non_interactive=True, **setup_args)
 
-        # set as new default profile
-        # prompt if there is another non-quicksetup profile
-        use_new = False
-        defprof = confs.get('default_profiles', {})
-        if defprof.get('daemon', '').startswith('quicksetup'):
-            use_new = click.confirm('The daemon default profile is set to {}, do you want to set the newly created one ({}) as default? (can be changed back later)'.format(defprof['daemon'], profile_name))
-            if use_new:
-                set_default_profile('daemon', profile_name, force_rewrite=True)
-        if defprof.get('verdi'):
-            use_new = click.confirm('The verdi default profile is set to {}, do you want to set the newly created one ({}) as new default? (can be changed back later)'.format(defprof['verdi'], profile_name))
-            if use_new:
-                set_default_profile('verdi', profile_name, force_rewrite=True)
+        # Loop over all valid processes and check if a default profile is set for them
+        # If not set the newly created profile as default, otherwise prompt whether to override
+        from aiida.cmdline.commands.profile import valid_processes
+
+        default_profiles = confs.get('default_profiles', {})
+
+        for process in valid_processes:
+
+            default_profile  = default_profiles.get(process, '')
+            default_override = False
+
+            if default_profile:
+                default_override = click.confirm("The default profile for the '{}' process is set to '{}': "
+                    "do you want to set the newly created '{}' as the new default? (can be reverted later)"
+                    .format(process, default_profile, profile_name))
+
+            if not default_profile or default_override:
+                set_default_profile(process, profile_name, force_rewrite=True)
+
 
     def _try_connect(self, **kwargs):
         '''
@@ -936,18 +949,6 @@ class Quicksetup(VerdiCommand):
             else:
                 create = False
         return dbname, create
-
-
-class Runserver(VerdiCommand):
-    """
-    Run the AiiDA webserver on localhost
-
-    This command runs the webserver on the default port. Further command line
-    options are passed to the Django manage runserver command
-    """
-
-    def run(self, *args):
-        pass_to_django_manage([execname, 'runserver'] + list(args))
 
 
 class Run(VerdiCommand):

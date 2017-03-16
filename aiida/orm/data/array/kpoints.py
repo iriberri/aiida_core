@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 """
 This module defines the classes related to band structures or dispersions
 in a Brillouin zone, and how to operate on them.
@@ -7,10 +15,6 @@ in a Brillouin zone, and how to operate on them.
 from aiida.orm.data.array import ArrayData
 import numpy
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__version__ = "0.7.1"
-__authors__ = "The AiiDA team."
 
 _default_epsilon_length = 1e-5
 _default_epsilon_angle = 1e-5
@@ -315,7 +319,7 @@ class KpointsData(ArrayData):
 
         :param mesh: a list of three integers, representing the size of the
             kpoint mesh along b1,b2,b3.
-        :param (optional) offset: a list of three floats between 0 and 1.
+        :param offset: (optional) a list of three floats between 0 and 1.
             [0.,0.,0.] is Gamma centered mesh
             [0.5,0.5,0.5] is half shifted
             [1.,1.,1.] by periodicity should be equivalent to [0.,0.,0.]
@@ -383,11 +387,11 @@ class KpointsData(ArrayData):
             kpoints, i.e. the number of kpoints along each reciprocal
             axis i is :math:`|b_i|/distance`
             where :math:`|b_i|` is the norm of the reciprocal cell vector.
-        :param (optional) offset: a list of three floats between 0 and 1.
+        :param offset: (optional) a list of three floats between 0 and 1.
             [0.,0.,0.] is Gamma centered mesh
             [0.5,0.5,0.5] is half shifted
             Default = [0.,0.,0.].
-        :param (optional) force_parity: if True, force each integer in the mesh
+        :param force_parity: (optional) if True, force each integer in the mesh
             to be even (except for the non-periodic directions). 
 
         :note: a cell should be defined first.

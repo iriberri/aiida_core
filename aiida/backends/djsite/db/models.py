@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 from django.db import models as m
 from django_extensions.db.fields import UUIDField
 from django.contrib.auth.models import (
@@ -15,10 +23,6 @@ from aiida.backends.settings import AIIDANODES_UUID_VERSION
 from aiida.backends.djsite.settings.settings import AUTH_USER_MODEL
 import aiida.backends.djsite.db.migrations as migrations
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__version__ = "0.7.1"
-__authors__ = "The AiiDA team."
 
 # This variable identifies the schema version of this file.
 # Every time you change the schema below in *ANY* way, REMEMBER TO CHANGE
@@ -112,6 +116,7 @@ class DbUser(AbstractBaseUser, PermissionsMixin):
         from aiida.orm.user import User
         return User(dbuser=self)
 
+
 @python_2_unicode_compatible
 class DbNode(m.Model):
     """
@@ -144,7 +149,7 @@ class DbNode(m.Model):
        modify them, but can be changed (e.g., the append_text of a code, that
        can be redefined if the code has to be recompiled).
     """
-    uuid = UUIDField(auto=True, version=AIIDANODES_UUID_VERSION)
+    uuid = UUIDField(auto=True, version=AIIDANODES_UUID_VERSION, db_index=True)
     # in the form data.upffile., data.structure., calculation., code.quantumespresso.pw., ...
     # Note that there is always a final dot, to allow to do queries of the
     # type (type__startswith="calculation.") and avoid problems with classes
@@ -287,7 +292,7 @@ class DbLink(m.Model):
         # defined below, since the difference in link type is not considered.
         # The distinction between the type of a 'create' and a 'return' link is not
         # implemented at the moment, so the unique constraint is disabled.
-        #unique_together = ("output", "label")
+        # unique_together = ("output", "label")
         pass
 
     def __str__(self):
@@ -1472,7 +1477,8 @@ class DbComputer(m.Model):
                 raise ValueError("The computer instance you are passing has not been stored yet")
             dbcomputer = computer.dbcomputer
         else:
-            raise TypeError("Pass either a computer name, a DbComputer django instance, a Computer pk or a Computer object")
+            raise TypeError(
+                "Pass either a computer name, a DbComputer django instance, a Computer pk or a Computer object")
         return dbcomputer
 
     def get_aiida_class(self):
@@ -1623,29 +1629,6 @@ class DbLog(m.Model):
     def __str__(self):
         return "[Log: {} for {} {}] {}".format(self.levelname,
                                                self.objname, self.objpk, self.message)
-
-    @classmethod
-    def add_from_logrecord(cls, record):
-        """
-        Add a new entry from a LogRecord (from the standard python
-        logging facility). No exceptions are managed here.
-        """
-        import json
-
-        objpk = record.__dict__.get('objpk', None)
-        objname = record.__dict__.get('objname', None)
-
-        # Filter: Do not store in DB if no objpk and objname is given
-        if objpk is None or objname is None:
-            return
-
-        new_entry = cls(loggername=record.name,
-                        levelname=record.levelname,
-                        objname=objname,
-                        objpk=objpk,
-                        message=record.getMessage(),
-                        metadata=json.dumps(record.__dict__))
-        new_entry.save()
 
 
 class DbLock(m.Model):

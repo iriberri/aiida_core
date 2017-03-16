@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
-__version__ = "0.7.1"
-__authors__ = "The AiiDA team."
 
 from aiida.orm import DataFactory
 from aiida.orm.calculation.inline import optional_inline
@@ -382,7 +386,6 @@ def _inline_to_standalone_script(calc):
             for x in input_dict.keys()]
     args_string = ",\n    ".join(sorted(args))
     return """#!/usr/bin/env runaiida
-# -*- coding: utf-8 -*-
 {}
 
 for key, value in {}(
@@ -577,7 +580,8 @@ def _collect_tags(node, calc,parameters=None,
     and prepare it to be saved in TCOD CIF.
     """
     import os, json
-    tags = { '_audit_creation_method': "AiiDA version {}".format(__version__) }
+    import aiida
+    tags = { '_audit_creation_method': "AiiDA version {}".format(aiida.__version__) }
 
     # Recording the dictionaries (if any)
 
@@ -975,10 +979,10 @@ def deposit(what, type, author_name=None, author_email=None, url=None,
             replace=None, message=None, **kwargs):
     """
     Launches a
-    :py:class:`aiida.orm.calculation.job.JobCalculation`
+    :py:class:`aiida.orm.implementation.general.calculation.job.AbstractJobCalculation`
     to deposit data node to \*COD-type database.
 
-    :return: launched :py:class:`aiida.orm.calculation.job.JobCalculation`
+    :return: launched :py:class:`aiida.orm.implementation.general.calculation.job.AbstractJobCalculation`
         instance.
     :raises ValueError: if any of the required parameters are not given.
     """
@@ -1135,11 +1139,11 @@ def deposition_cmdline_parameters(parser, expclass="Data"):
 def translate_calculation_specific_values(calc, translator, **kwargs):
     """
     Translates calculation-specific values from
-    :py:class:`aiida.orm.calculation.job.JobCalculation` subclass to
+    :py:class:`aiida.orm.implementation.general.calculation.job.AbstractJobCalculation` subclass to
     appropriate TCOD CIF tags.
 
     :param calc: an instance of
-        :py:class:`aiida.orm.calculation.job.JobCalculation` subclass.
+        :py:class:`aiida.orm.implementation.general.calculation.job.AbstractJobCalculation` subclass.
     :param translator: class, derived from
         :py:class:`aiida.tools.dbexporters.tcod_plugins.BaseTcodtranslator`.
     :raises ValueError: if **translator** is not derived from proper class.

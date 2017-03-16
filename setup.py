@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
+###########################################################################
+# Copyright (c), The AiiDA team. All rights reserved.                     #
+# This file is part of the AiiDA code.                                    #
+#                                                                         #
+# The code is hosted on GitHub at https://github.com/aiidateam/aiida_core #
+# For further information on the license, see the LICENSE.txt file        #
+# For further information please visit http://www.aiida.net               #
+###########################################################################
+import fastentrypoints
 from os import path
 from setuptools import setup, find_packages
-from setup_requirements import install_requires, extras_require, dependency_links
+from setup_requirements import install_requires, extras_require
 
-__copyright__ = u"Copyright (c), This file is part of the AiiDA platform. For further information please visit http://www.aiida.net/. All rights reserved."
-__license__ = "MIT license, see LICENSE.txt file."
 
 
 
@@ -33,7 +40,6 @@ if __name__ == '__main__':
         version=aiida_version,
         install_requires=install_requires,
         extras_require=extras_require,
-        dependency_links=dependency_links,
         packages=find_packages(),
         entry_points={
             'console_scripts': [
