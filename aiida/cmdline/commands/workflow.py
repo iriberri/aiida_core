@@ -12,10 +12,9 @@ import sys
 from aiida.cmdline.baseclass import VerdiCommandWithSubcommands
 
 
-
 class Workflow(VerdiCommandWithSubcommands):
     """
-    Manage the AiiDA worflow manager
+    Manage the AiiDA legacy worflow manager
 
     Valid subcommands are:
     * list: list the running workflows running and their state. Pass a -h
@@ -136,9 +135,9 @@ class Workflow(VerdiCommandWithSubcommands):
         Pass a list of workflow PKs to kill them.
         If you also pass the -f option, no confirmation will be asked.
         """
-        from aiida.backends.utils import load_dbenv
-
-        load_dbenv()
+        from aiida.backends.utils import load_dbenv, is_dbenv_loaded
+        if not is_dbenv_loaded():
+            load_dbenv()
 
         from aiida.cmdline import wait_for_confirmation
         from aiida.orm.workflow import kill_from_pk

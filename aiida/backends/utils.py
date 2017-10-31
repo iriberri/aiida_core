@@ -17,8 +17,26 @@ from aiida.common.exceptions import (
         InvalidOperation
     )
 
+AIIDA_ATTRIBUTE_SEP = '.'
 
+def validate_attribute_key(key):
+    """
+    Validate the key string to check if it is valid (e.g., if it does not
+    contain the separator symbol.).
 
+    :return: None if the key is valid
+    :raise ValidationError: if the key is not valid
+    """
+    from aiida.common.exceptions import ValidationError
+
+    if not isinstance(key, basestring):
+        raise ValidationError("The key must be a string.")
+    if not key:
+        raise ValidationError("The key cannot be an empty string.")
+    if AIIDA_ATTRIBUTE_SEP in key:
+        raise ValidationError("The separator symbol '{}' cannot be present "
+                              "in the key of attributes, extras, etc.".format(
+            AIIDA_ATTRIBUTE_SEP))
 
 
 def QueryFactory():
@@ -127,7 +145,8 @@ def get_authinfo(computer, aiidauser):
                     aiidauser.email, computer.name))
     elif settings.BACKEND == BACKEND_SQLA:
         from aiida.backends.sqlalchemy.models.authinfo import DbAuthInfo
-        from aiida.backends.sqlalchemy import session
+        from aiida.backends.sqlalchemy import get_scoped_session
+        session = get_scoped_session()
         from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
         try:
             authinfo = session.query(DbAuthInfo).filter_by(
@@ -194,17 +213,6 @@ def get_global_setting_description(key):
     return get_global_setting_description(key)
 
 
-def get_db_schema_version():
-    """
-    Get the current schema version stored in the DB. Return None if
-    it is not stored.
-    """
-    try:
-        return get_global_setting('db|schemaversion')
-    except KeyError:
-        return None
-
-
 def get_backend_type():
     """
     Set the schema version stored in the DB. Use only if you know what
@@ -235,16 +243,6 @@ def del_global_setting(key):
     del_global_setting(key)
 
 
-def set_db_schema_version(version):
-    """
-    Set the schema version stored in the DB. Use only if you know what
-    you are doing.
-    """
-    return set_global_setting(
-        'db|schemaversion', version,
-        description="The version of the schema used in this database.")
-
-
 def set_backend_type(backend_name):
     """
     Set the schema version stored in the DB. Use only if you know what
@@ -253,25 +251,6 @@ def set_backend_type(backend_name):
     return set_global_setting(
         'db|backend', backend_name,
         description="The backend used to communicate with the database.")
-
-
-def check_schema_version():
-    """
-    Check if the version stored in the database is the same of the version
-    of the code. It calls the corresponding version of the selected
-    backend.
-
-    :raise ConfigurationError: if the two schema versions do not match.
-      Otherwise, just return.
-    """
-    if settings.BACKEND == BACKEND_DJANGO:
-        from aiida.backends.djsite.utils import check_schema_version
-        return check_schema_version()
-    elif settings.BACKEND == BACKEND_SQLA:
-        from aiida.backends.sqlalchemy.utils import check_schema_version
-        return check_schema_version()
-    else:
-        raise Exception("unknown backend {}".format(settings.BACKEND))
 
 
 def get_current_profile():
@@ -295,6 +274,7 @@ def _get_column(colname, alias):
     try:
         return getattr(alias, colname)
     except:
+        from aiida.common.exceptions import InputValidationError
         raise InputValidationError(
             "\n{} is not a column of {}\n"
             "Valid columns are:\n"
@@ -303,4 +283,3 @@ def _get_column(colname, alias):
                     '\n'.join(alias._sa_class_manager.mapper.c.keys())
                 )
         )
-

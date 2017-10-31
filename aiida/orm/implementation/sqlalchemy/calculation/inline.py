@@ -8,8 +8,6 @@
 # For further information please visit http://www.aiida.net               #
 ###########################################################################
 
-from aiida.backends.sqlalchemy import session
-
 from aiida.orm.implementation.general.calculation.inline import (
     InlineCalculation)
 
@@ -87,7 +85,7 @@ def make_inline(func):
 
         # Add link to output data nodes
         for k, v in retval.iteritems():
-            v.add_link_from(c, label=k, link_type=LinkType.RETURN)
+            v.add_link_from(c, label=k, link_type=LinkType.CREATE)
 
         # I call store_all for the Inline calculation;
         # this will store also the inputs, if neeced.

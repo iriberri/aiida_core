@@ -14,7 +14,9 @@ import inspect
 import os.path
 import string
 import sys
+import numbers
 
+import numpy as np
 from dateutil.parser import parse
 
 from aiida.common.exceptions import ConfigurationError
@@ -35,6 +37,34 @@ class classproperty(object):
 
     def __get__(self, instance, owner):
         return self.getter(owner)
+
+
+class abstractclassmethod(classmethod):
+    """
+    A decorator indicating abstract classmethods.
+
+    Backported from python3.
+    """
+    __isabstractmethod__ = True
+
+    def __init__(self, callable):
+        callable.__isabstractmethod__ = True
+        super(abstractclassmethod, self).__init__(callable)
+
+
+class abstractstaticmethod(staticmethod):
+    """
+    A decorator indicating abstract staticmethods.
+
+    Similar to abstractmethod.
+    Backported from python3.
+    """
+
+    __isabstractmethod__ = True
+
+    def __init__(self, callable):
+        callable.__isabstractmethod__ = True
+        super(abstractstaticmethod, self).__init__(callable)
 
 
 def get_configured_user_email():
@@ -197,20 +227,19 @@ def conv_to_fortran(val):
     """
     # Note that bool should come before integer, because a boolean matches also
     # isinstance(...,int)
-    if (isinstance(val, bool)):
+    if isinstance(val, (bool, np.bool_)):
         if val:
             val_str = '.true.'
         else:
             val_str = '.false.'
-    elif (isinstance(val, (int, long))):
+    elif isinstance(val, numbers.Integral):
         val_str = "{:d}".format(val)
-    elif (isinstance(val, float)):
+    elif isinstance(val, numbers.Real):
         val_str = ("{:18.10e}".format(val)).replace('e', 'd')
-    elif (isinstance(val, basestring)):
+    elif isinstance(val, basestring):
         val_str = "'{!s}'".format(val)
     else:
-        raise ValueError("Invalid value passed, accepts only bools, ints, "
-                         "floats and strings")
+        raise ValueError("Invalid value '{}' of type '{}' passed, accepts only bools, ints, floats and strings".format(val, type(val)))
 
     return val_str
 
@@ -694,7 +723,7 @@ def get_fortfloat(key, txt, be_case_sensitive=True):
         return float(match.group('float').replace('d', 'e').replace('D', 'e'))
 
 
-def ask_question(question, reply_type, allow_none_as_answer):
+def ask_question(question, reply_type, allow_none_as_answer=True):
     """
     This method asks a specific question, tries to parse the given reply
     and then it verifies the parsed answer.
@@ -925,3 +954,308 @@ def issingular(singularForm):
     pluralForm = pluralize(singularForm)
     singular = True if singularForm is not pluralForm else False
     return singular, pluralForm
+
+
+class Prettifier(object):
+    """
+    Class to manage prettifiers (typically for labels of kpoints
+    in band plots)
+    """
+
+    @classmethod
+    def _prettify_label_pass(cls,label):
+        """
+        No-op prettifier, simply returns  the same label
+
+        :param label: a string to prettify
+        """
+        return label
+
+    @classmethod
+    def _prettify_label_agr(cls,label):
+        """
+        Prettifier for XMGrace
+
+        :param label: a string to prettify
+        """
+        import re
+        newlabel = label
+
+        newlabel = newlabel.replace('GAMMA', r'\xG\f{}')
+        newlabel = newlabel.replace('DELTA', r'\xD\f{}')
+        newlabel = newlabel.replace('LAMBDA', r'\xL\f{}')
+        newlabel = newlabel.replace('SIGMA', r'\xS\f{}')
+        newlabel = re.sub('_(.{0,1})', r'\\s\1\\N', newlabel)
+
+        return newlabel
+
+    @classmethod
+    def _prettify_label_agr_simple(cls,label):
+        """
+        Prettifier for XMGrace (for old label names)
+
+        :param label: a string to prettify
+        """
+        import re
+
+        newlabel = label
+
+        newlabel = re.sub('([0-9])', r'\\s\1\\N', newlabel)
+
+        if newlabel == 'G':
+            return r'\xG'
+        else:
+            return newlabel
+
+    @classmethod
+    def _prettify_label_gnuplot(cls,label):
+        """
+        Prettifier for Gnuplot
+
+        :note: uses unicode, returns unicode strings (potentially, if needed)
+
+        :param label: a string to prettify
+        """
+        import re
+        newlabel = label
+
+        newlabel = newlabel.replace(u'GAMMA', u'Γ')
+        newlabel = newlabel.replace(u'DELTA', u'Δ')
+        newlabel = newlabel.replace(u'LAMBDA', u'Λ')
+        newlabel = newlabel.replace(u'SIGMA', u'Σ')
+        newlabel = re.sub(u'_(.{0,1})', ur'_{\1}', newlabel)
+
+        return newlabel
+
+    @classmethod
+    def _prettify_label_gnuplot_simple(cls,label):
+        """
+        Prettifier for Gnuplot (for old label names)
+
+        :note: uses unicode, returns unicode strings (potentially, if needed)
+
+        :param label: a string to prettify
+        """
+        import re
+
+        newlabel = label
+
+        newlabel = re.sub(u'([0-9])', ur'_{\1}', newlabel)
+
+        if newlabel == 'G':
+            return u'Γ'
+        else:
+            return newlabel
+
+
+    @classmethod
+    def _prettify_label_latex(cls,label):
+        """
+        Prettifier for matplotlib, using LaTeX syntax
+
+        :param label: a string to prettify
+        """
+        import re
+        newlabel = label
+
+        newlabel = newlabel.replace('GAMMA', r'$\Gamma$')
+        newlabel = newlabel.replace('DELTA', r'$\Delta$')
+        newlabel = newlabel.replace('LAMBDA', r'$\Lambda$')
+        newlabel = newlabel.replace('SIGMA', r'$\Sigma$')
+        newlabel = re.sub('_(.{0,1})', r'$_{\1}$', newlabel)
+
+        #newlabel = newlabel + r"$_{\vphantom{0}}$"
+
+        return newlabel
+
+    @classmethod
+    def _prettify_label_latex_simple(cls,label):
+        """
+        Prettifier for matplotlib, using LaTeX syntax (for old label names)
+
+        :param label: a string to prettify
+        """
+        import re
+
+        newlabel = label
+        newlabel = re.sub('([0-9])', r'$_{\1}$', newlabel)
+
+        if newlabel == 'G':
+            return r'$\Gamma$'
+        else:
+            return newlabel
+
+    @classproperty
+    def prettifiers(cls):
+        """
+        Property that returns a dictionary that for each string associates
+        the function to prettify a label
+
+        :return: a dictionary where keys are strings and values are functions
+        """
+        return {
+        'agr_seekpath': cls._prettify_label_agr,
+        'agr_simple': cls._prettify_label_agr_simple,
+        'latex_simple': cls._prettify_label_latex_simple,
+        'latex_seekpath': cls._prettify_label_latex,
+        'gnuplot_simple': cls._prettify_label_gnuplot_simple,
+        'gnuplot_seekpath': cls._prettify_label_gnuplot,
+        'pass': cls._prettify_label_pass,
+    }
+
+    @classmethod
+    def get_prettifiers(cls):
+        """
+        Return a list of valid prettifier strings
+
+        :return: a list of strings
+        """
+        return sorted(cls.prettifiers.keys())
+
+    def __init__(self, format):
+        """
+        Create a class to pretttify strings of a given format
+
+        :param format: a string with the format to use to prettify.
+           Valid formats are obtained from self.prettifiers
+        """
+        if format is None:
+            format = 'pass'
+        try:
+            self._prettifier_f = self.prettifiers[format]
+        except KeyError:
+            raise ValueError("Unknown prettifier format {}; "
+                             "valid formats: {}".format(
+                format,
+                ", ".join(self.get_prettifiers())
+                ))
+
+    def prettify(self, label):
+        """
+        Prettify a label using the format passed in the initializer
+
+        :param label: the string to prettify
+        :return: a prettified string
+        """
+        return self._prettifier_f(label)
+
+
+def prettify_labels(labels, format=None):
+    """
+    Prettify label for typesetting in various formats
+
+    :param labels: a list of length-2 tuples, in the format(position, label)
+    :param format: a string with the format for the prettifier (e.g. 'agr',
+         'matplotlib', ...)
+    :return: the same list as labels, but with the second value possibly replaced
+         with a prettified version that typesets nicely in the selected format
+    """
+    prettifier = Prettifier(format)
+
+    retlist = []
+    for label_pos, label in labels:
+        retlist.append((label_pos, prettifier.prettify(label)))
+    return retlist
+
+
+def join_labels(labels, join_symbol="|", threshold=1.e-6):
+    """
+    Join labels with a joining symbol when they are very close
+
+    :param labels: a list of length-2 tuples, in the format(position, label)
+    :param join_symbol: the string to use to join different paths. By default, a pipe
+    :param threshold: the threshold to decide if two float values are the same and should
+         be joined
+    :return: the same list as labels, but with the second value possibly replaced
+         with strings joined when close enough
+    """
+    if labels:
+        new_labels = [list(labels[0])]
+        # modify labels when in overlapping position
+        j = 0
+        for i in range(1, len(labels)):
+            if abs(labels[i][0] - labels[i - 1][0]) < threshold:
+                new_labels[j][1] += join_symbol + labels[i][1]
+            else:
+                new_labels.append(list(labels[i]))
+                j += 1
+    else:
+        new_labels = []
+
+    return new_labels
+
+def get_mode_string(mode):
+    """
+    Convert a file's mode to a string of the form '-rwxrwxrwx'.
+    Taken (simplified) from cpython 3.3 stat module: https://hg.python.org/cpython/file/3.3/Lib/stat.py
+    """
+    # Constants used as S_IFMT() for various file types
+    # (not all are implemented on all systems)
+
+    S_IFDIR = 0o040000  # directory
+    S_IFCHR = 0o020000  # character device
+    S_IFBLK = 0o060000  # block device
+    S_IFREG = 0o100000  # regular file
+    S_IFIFO = 0o010000  # fifo (named pipe)
+    S_IFLNK = 0o120000  # symbolic link
+    S_IFSOCK = 0o140000  # socket file
+
+    # Names for permission bits
+
+    S_ISUID = 0o4000  # set UID bit
+    S_ISGID = 0o2000  # set GID bit
+    S_ENFMT = S_ISGID  # file locking enforcement
+    S_ISVTX = 0o1000  # sticky bit
+    S_IREAD = 0o0400  # Unix V7 synonym for S_IRUSR
+    S_IWRITE = 0o0200  # Unix V7 synonym for S_IWUSR
+    S_IEXEC = 0o0100  # Unix V7 synonym for S_IXUSR
+    S_IRWXU = 0o0700  # mask for owner permissions
+    S_IRUSR = 0o0400  # read by owner
+    S_IWUSR = 0o0200  # write by owner
+    S_IXUSR = 0o0100  # execute by owner
+    S_IRWXG = 0o0070  # mask for group permissions
+    S_IRGRP = 0o0040  # read by group
+    S_IWGRP = 0o0020  # write by group
+    S_IXGRP = 0o0010  # execute by group
+    S_IRWXO = 0o0007  # mask for others (not in group) permissions
+    S_IROTH = 0o0004  # read by others
+    S_IWOTH = 0o0002  # write by others
+    S_IXOTH = 0o0001  # execute by others
+
+    _filemode_table = (
+        ((S_IFLNK, "l"),
+         (S_IFREG, "-"),
+         (S_IFBLK, "b"),
+         (S_IFDIR, "d"),
+         (S_IFCHR, "c"),
+         (S_IFIFO, "p")),
+
+        ((S_IRUSR, "r"),),
+        ((S_IWUSR, "w"),),
+        ((S_IXUSR | S_ISUID, "s"),
+         (S_ISUID, "S"),
+         (S_IXUSR, "x")),
+
+        ((S_IRGRP, "r"),),
+        ((S_IWGRP, "w"),),
+        ((S_IXGRP | S_ISGID, "s"),
+         (S_ISGID, "S"),
+         (S_IXGRP, "x")),
+
+        ((S_IROTH, "r"),),
+        ((S_IWOTH, "w"),),
+        ((S_IXOTH | S_ISVTX, "t"),
+         (S_ISVTX, "T"),
+         (S_IXOTH, "x"))
+    )
+
+
+    perm = []
+    for table in _filemode_table:
+        for bit, char in table:
+            if mode & bit == bit:
+                perm.append(char)
+                break
+        else:
+            perm.append("-")
+    return "".join(perm)

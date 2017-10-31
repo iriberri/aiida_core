@@ -12,15 +12,15 @@ from datetime import datetime
 import aiida.backends.sqlalchemy
 
 from sqlalchemy import and_, or_, not_
-from sqlalchemy.types import Integer, Float, Boolean, DateTime
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import Integer, Float, Boolean, DateTime, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from sqlalchemy.orm import aliased
-from sqlalchemy.sql.expression import cast
+from sqlalchemy.sql.expression import cast, ColumnClause
 
 
 from sqlalchemy.orm.attributes import InstrumentedAttribute
-from sqlalchemy.sql.elements import Cast
+from sqlalchemy.sql.elements import Cast, Label
 from sqlalchemy_utils.types.choice import Choice
 
 from aiida.common.exceptions import (
@@ -127,12 +127,12 @@ class QueryBuilderImplSQLA(QueryBuilderInterface):
     def AiidaNode(self):
         import aiida.orm.implementation.sqlalchemy.node
         return aiida.orm.implementation.sqlalchemy.node.Node
-        
+
     @property
     def AiidaGroup(self):
         import aiida.orm.implementation.sqlalchemy.group
         return aiida.orm.implementation.sqlalchemy.group.Group
-        
+
     @property
     def AiidaUser(self):
         import aiida.orm.implementation.sqlalchemy.user
@@ -143,13 +143,8 @@ class QueryBuilderImplSQLA(QueryBuilderInterface):
         import aiida.orm.implementation.sqlalchemy.computer
         return aiida.orm.implementation.sqlalchemy.computer.Computer
 
-
-    def prepare_with_dbpath(self):
-        from aiida.backends.sqlalchemy.models.node import DbPath
-        self.Path = DbPath
-
     def get_session(self):
-        return aiida.backends.sqlalchemy.session
+        return aiida.backends.sqlalchemy.get_scoped_session()
 
     def modify_expansions(self, alias, expansions):
         """
@@ -316,7 +311,9 @@ class QueryBuilderImplSQLA(QueryBuilderInterface):
 
     def _get_filter_expr_from_column(self, operator, value, column):
 
-        if not isinstance(column, (Cast, InstrumentedAttribute)):
+        # Label is used because it is what is returned for the
+        # 'state' column by the hybrid_column construct
+        if not isinstance(column, (Cast, InstrumentedAttribute, Label, ColumnClause)):
             raise TypeError(
                 'column ({}) {} is not a valid column'.format(
                     type(column), column
@@ -334,9 +331,11 @@ class QueryBuilderImplSQLA(QueryBuilderInterface):
         elif operator == '<=':
             expr = database_entity <= value
         elif operator == 'like':
-            expr = database_entity.like(value)
+            # This operator can only exist for strings, so I cast to avoid problems
+            # as they occured for the UUID, which does not support the like operator
+            expr = database_entity.cast(String).like(value)
         elif operator == 'ilike':
-            expr = database_entity.ilike(value)
+            expr = database_entity.cast(String).ilike(value)
         elif operator == 'in':
             expr = database_entity.in_(value)
         else:
@@ -579,10 +578,8 @@ class QueryBuilderImplSQLA(QueryBuilderInterface):
                 # The only valid string at this point is a string
                 # that matches exactly the _plugin_type_string
                 # of a node class
-                from aiida.common.pluginloader import (
-                        from_type_to_pluginclassname,
-                        load_plugin
-                    )
+                from aiida.common.old_pluginloader import from_type_to_pluginclassname
+                from aiida.common.pluginloader import load_plugin
                 ormclass = self.Node
                 try:
                     pluginclassname = from_type_to_pluginclassname(ormclasstype)
@@ -593,7 +590,7 @@ class QueryBuilderImplSQLA(QueryBuilderInterface):
                     # In the future, assuming the user knows what he or she is doing
                     # we could remove that check
                     # The query_type_string we can get from
-                    # the aiida.common.pluginloader function get_query_type_string
+                    # the aiida.common.old_pluginloader function get_query_type_string
                     PluginClass = load_plugin(self.AiidaNode, 'aiida.orm', pluginclassname)
                 except (DbContentError, MissingPluginError) as e:
                     raise InputValidationError(

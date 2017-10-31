@@ -11,7 +11,7 @@
 import sys
 import os
 
-from aiida.common.exceptions import ConfigurationError
+from aiida.common.exceptions import ConfigurationError, MissingConfigurationError
 
 # get_property is used to read properties stored in the config json
 from aiida.common.setup import (get_config, get_secret_key, get_property,
@@ -29,8 +29,8 @@ sys.path = [BASE_DIR] + sys.path
 
 try:
     confs = get_config()
-except ConfigurationError:
-    raise ConfigurationError(
+except MissingConfigurationError:
+    raise MissingConfigurationError(
         "Please run the AiiDA Installation, no config found")
 
 if settings.AIIDADB_PROFILE is None:
@@ -51,50 +51,43 @@ DBPORT = profile_conf.get('AIIDADB_PORT', '')
 
 DATABASES = {
     'default': {
-        # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
+        # Add 'postgresql_psycopg2', 'mysql', or 'oracle'.
         'ENGINE': 'django.db.backends.' + DBENGINE,
-        'NAME': DBNAME,  # Or path to database file if using sqlite3.
-        'USER': DBUSER,  # Not used with sqlite3.
-        'PASSWORD': DBPASS,  # Not used with sqlite3.
+        'NAME': DBNAME,
+        'USER': DBUSER,
+        'PASSWORD': DBPASS,
         'HOST': DBHOST,
-        # Set to empty string for localhost. Not used with sqlite3.
         'PORT': DBPORT,
-        # Set to empty string for default. Not used with sqlite3.
     }
 }
 
-# Increase timeout for SQLite engine
-# Does not solve the problem, but alleviates it for small number of calculations
-if 'sqlite' in DBENGINE:
-    DATABASES['default']['OPTIONS'] = {'timeout': 60}
+# Checks on the REPOSITORY_* variables
+try:
+    REPOSITORY_URI
+except NameError:
+    raise ConfigurationError(
+        "Please setup correctly the REPOSITORY_URI variable to "
+        "a suitable directory on which you have write permissions.")
 
-# # Checks on the REPOSITORY_* variables
-# try:
-#     REPOSITORY_URI
-# except NameError:
-#     raise ConfigurationError(
-#         "Please setup correctly the REPOSITORY_URI variable to "
-#         "a suitable directory on which you have write permissions.")
+# Note: this variable might disappear in the future
+REPOSITORY_PROTOCOL, REPOSITORY_PATH = parse_repository_uri(REPOSITORY_URI)
 
-# # Note: this variable might disappear in the future
-# REPOSITORY_PROTOCOL, REPOSITORY_PATH = parse_repository_uri(REPOSITORY_URI)
-
-# if settings.IN_DOC_MODE:
-#     pass
-# elif REPOSITORY_PROTOCOL == 'file':
-#     if not os.path.isdir(REPOSITORY_PATH):
-#         try:
-#             # Try to create the local repository folders with needed parent
-#             # folders
-#             os.makedirs(REPOSITORY_PATH)
-#         except OSError:
-#             # Possibly here due to permission problems
-#             raise ConfigurationError(
-#                 "Please setup correctly the REPOSITORY_PATH variable to "
-#                 "a suitable directory on which you have write permissions. "
-#                 "(I was not able to create the directory.)")
-# else:
-#     raise ConfigurationError("Only file protocol supported")
+if settings.IN_DOC_MODE:
+    pass
+elif REPOSITORY_PROTOCOL == 'file':
+    if not os.path.isdir(REPOSITORY_PATH):
+        try:
+            # Try to create the local repository folders with needed parent
+            # folders
+            os.makedirs(REPOSITORY_PATH)
+        except OSError:
+            # Possibly here due to permission problems
+            raise ConfigurationError(
+                "Please setup correctly the REPOSITORY_PATH variable to "
+                "a suitable directory on which you have write permissions. "
+                "(I was not able to create the directory.)")
+else:
+    raise ConfigurationError("Only file protocol supported")
 
 # CUSTOM USER CLASS
 AUTH_USER_MODEL = 'db.DbUser'
@@ -217,19 +210,8 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # Uncomment the next line to enable the admin:
-    'django.contrib.admin',
-    # Uncomment the next line to enable admin documentation:
-    # 'django.contrib.admindocs',
     'aiida.backends.djsite.db',
-    # ~ 'djcelery',
 ]
-try:
-    import kombu
-
-    INSTALLED_APPS.append('kombu.transport.django')
-except ImportError:
-    pass
 
 # Automatic logging configuration for Django is disabled here
 # and done for all backends in aiida/__init__.py
@@ -240,54 +222,3 @@ LOGGING_CONFIG = None
 # -------------------------
 # For the time being, we support only json
 TASTYPIE_DEFAULT_FORMATS = ['json']
-
-# -------------------------
-# AiiDA-Deamon configuration
-# -------------------------
-# from celery.schedules import crontab
-# ~ from datetime import timedelta
-# ~ import djcelery
-# ~
-# ~ djcelery.setup_loader()
-# ~
-# ~ BROKER_URL = "django://"
-# ~ CELERY_RESULT_BACKEND = "database"
-# ~ # Avoid to store the results in the database, it uses a lot of resources
-# ~ # and we do not need results
-# ~ CELERY_IGNORE_RESULT = True
-# ~ #CELERY_STORE_ERRORS_EVEN_IF_IGNORED=True
-# ~ #CELERYD_HIJACK_ROOT_LOGGER = False
-# ~
-# ~ CELERYBEAT_SCHEDULER = "djcelery.schedulers.DatabaseScheduler"
-# ~
-# ~ # Used internally, in the functions that get the last daemon timestamp.
-# ~ # Key: internal name, left: actual celery name. Can be the same
-# ~ djcelery_tasks = {
-# ~ 'submitter': 'submitter',
-# ~ 'updater': 'updater',
-# ~ 'retriever': 'retriever',
-# ~ 'workflow': 'workflow_stepper',
-# ~ }
-# ~
-# ~ # Choose here how often the tasks should be run. Note that if the previous task
-# ~ # is still running, the new one does not start thanks to the DbLock feature
-# ~ # that we added.
-# ~ CELERYBEAT_SCHEDULE = {
-# ~ djcelery_tasks['submitter']: {
-# ~ 'task': 'aiida.backends.djsite.db.tasks.submitter',
-# ~ 'schedule': timedelta(seconds=30),
-# ~ },
-# ~ djcelery_tasks['updater']: {
-# ~ 'task': 'aiida.backends.djsite.db.tasks.updater',
-# ~ 'schedule': timedelta(seconds=30),
-# ~ },
-# ~ djcelery_tasks['retriever']: {
-# ~ 'task': 'aiida.backends.djsite.db.tasks.retriever',
-# ~ 'schedule': timedelta(seconds=30),
-# ~ },
-# ~ djcelery_tasks['workflow']: {
-# ~ 'task': 'aiida.backends.djsite.db.tasks.workflow_stepper',
-# ~ 'schedule': timedelta(seconds=5),
-# ~ },
-# ~ }
-# ~

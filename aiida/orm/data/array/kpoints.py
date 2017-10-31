@@ -14,11 +14,10 @@ in a Brillouin zone, and how to operate on them.
 
 from aiida.orm.data.array import ArrayData
 import numpy
-
+from aiida.common.utils import classproperty
 
 _default_epsilon_length = 1e-5
 _default_epsilon_angle = 1e-5
-
 
 class KpointsData(ArrayData):
     """
@@ -40,6 +39,23 @@ class KpointsData(ArrayData):
             self._load_cell_properties()
         except AttributeError:
             pass
+
+    def get_desc(self):
+        """
+        Returns a string with infos retrieved from  kpoints node's properties.
+        :param node:
+        :return: retstr
+        """
+        try:
+            mesh = self.get_kpoints_mesh()
+            return "Kpoints mesh: {}x{}x{} (+{:.1f},{:.1f},{:.1f})".format(
+                mesh[0][0], mesh[0][1], mesh[0][2],
+                mesh[1][0], mesh[1][1], mesh[1][2])
+        except AttributeError:
+            try:
+                return '(Path of {} kpts)'.format(len(self.get_kpoints()))
+            except OSError:
+                return self.dbnode.type
 
     @property
     def cell(self):

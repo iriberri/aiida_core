@@ -6,11 +6,12 @@ Developer's guide
 
    developers
    internals
+   plugins/index
    devel_tutorial/code_plugin_int_sum
    devel_tutorial/code_plugin_float_sum
    devel_tutorial/code_plugin_qe
    devel_tutorial/parser_warnings_policy
-   parsertests
+   devel_tutorial/extend_restapi
    workflows
    dev_workflow
    data_cmdline
@@ -19,3 +20,4 @@ Developer's guide
    sphinx_cheatsheet
    ../verdi/properties
    database_schema
+   control/index

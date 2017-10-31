@@ -8,6 +8,7 @@
 # For further information please visit http://www.aiida.net               #
 ###########################################################################
 
+import inspect
 import collections
 import uuid
 from enum import Enum
@@ -30,6 +31,7 @@ import aiida.work.util
 from aiida.work.util import PROCESS_LABEL_ATTR, get_or_create_output_group
 from aiida.orm.calculation import Calculation
 from aiida.orm.data.parameter import ParameterData
+from aiida.orm.calculation.work import WorkCalculation
 from aiida import LOG_LEVEL_REPORT
 
 
@@ -42,7 +44,7 @@ class DictSchema(object):
         """
         Call this to validate the value against the schema.
 
-        :param value: a regular dictionary or a ParameterData instance 
+        :param value: a regular dictionary or a ParameterData instance
         :return: tuple (success, msg).  success is True if the value is valid
             and False otherwise, in which case msg will contain information about
             the validation failure.
@@ -234,8 +236,25 @@ class Process(plum.process.Process):
 
     @override
     def on_finish(self):
+        """
+        Called when a Process enters the FINISHED state at which point
+        we set the corresponding attribute of the workcalculation node
+        """
         super(Process, self).on_finish()
-        self.calc.seal()
+        self.calc._set_attr(WorkCalculation.FINISHED_KEY, True)
+
+    @override
+    def on_destroy(self):
+        """
+        Called when a Process enters the DESTROYED state which should be
+        the final process state and so we seal the calculation node
+        """
+        super(Process, self).on_destroy()
+        if self.calc.has_finished():
+            try:
+                self.calc.seal()
+            except exceptions.ModificationNotAllowed:
+                pass
 
     @override
     def _on_output_emitted(self, output_port, value, dynamic):
@@ -291,8 +310,12 @@ class Process(plum.process.Process):
     @protected
     def report(self, msg, *args, **kwargs):
         """
+        Log a message to the logger, which should get saved to the
+        database through the attached DbLogHandler. The class name and function
+        name of the caller are prepended to the given message
         """
-        self.logger.log(LOG_LEVEL_REPORT, msg, *args, **kwargs)
+        message = '[{}|{}|{}]: {}'.format(self.calc.pk, self.__class__.__name__, inspect.stack()[1][3], msg)
+        self.logger.log(LOG_LEVEL_REPORT, message, *args, **kwargs)
 
     # @override
     # def create_input_args(self, inputs):
@@ -328,8 +351,8 @@ class Process(plum.process.Process):
         # deal with things like input groups
         to_link = {}
         for name, input in self.inputs.iteritems():
-            # Ignore all inputs starting with a leading underscore
-            if name.startswith('_'):
+            # Ignore all inputs starting with a leading underscore, and None inputs
+            if name.startswith('_') or input is None:
                 continue
 
             if self.spec().has_input(name):
@@ -363,11 +386,16 @@ class Process(plum.process.Process):
             self.calc.add_link_from(parent_calc, "CALL",
                                     link_type=LinkType.CALL)
 
+        self._add_description_and_label()
+
+    def _add_description_and_label(self):
         if self.raw_inputs:
-            if '_description' in self.raw_inputs:
-                self.calc.description = self.raw_inputs._description
-            if '_label' in self.raw_inputs:
-                self.calc.label = self.raw_inputs._label
+            description = self.raw_inputs.get('_description', None)
+            if description is not None:
+                self._calc.description = description
+            label = self.raw_inputs.get('_label', None)
+            if label is not None:
+                self._calc.label = label
 
     def _can_fast_forward(self, inputs):
         return False
@@ -495,9 +523,10 @@ class _ProcessFinaliser(plum.process_monitor.ProcessMonitorListener):
         except ValueError:
             pass
         else:
+            calc_node._set_attr(calc_node.FAILED_KEY, True)
             calc_node.seal()
-        aiida.work.util.ProcessStack.pop(pid=pid)
-
+        finally:
+            aiida.work.util.ProcessStack.pop(pid=pid)
 
 # Have a global singleton to take care of finalising all processes
 _finaliser = _ProcessFinaliser()

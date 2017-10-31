@@ -7,6 +7,9 @@
 # For further information on the license, see the LICENSE.txt file        #
 # For further information please visit http://www.aiida.net               #
 ###########################################################################
+import sys
+
+from six import reraise
 from django.db import models as m
 from django_extensions.db.fields import UUIDField
 from django.contrib.auth.models import (
@@ -22,7 +25,7 @@ from aiida.common.exceptions import (
 from aiida.backends.settings import AIIDANODES_UUID_VERSION
 from aiida.backends.djsite.settings.settings import AUTH_USER_MODEL
 import aiida.backends.djsite.db.migrations as migrations
-
+from aiida.backends.utils import AIIDA_ATTRIBUTE_SEP
 
 # This variable identifies the schema version of this file.
 # Every time you change the schema below in *ANY* way, REMEMBER TO CHANGE
@@ -43,7 +46,7 @@ class AiidaQuerySet(QuerySet):
 
 
 class AiidaObjectManager(m.Manager):
-    def get_query_set(self):
+    def get_queryset(self):
         return AiidaQuerySet(self.model, using=self._db)
 
 
@@ -127,12 +130,6 @@ class DbNode(m.Model):
 
     * A is 'input' of C.
     * C is 'output' of A.
-    * A is 'parent' of B,C
-    * C,B are 'children' of A.
-
-    :note: parents and children are stored in the DbPath table, the transitive
-      closure table, automatically updated via DB triggers whenever a link is
-      added to or removed from the DbLink table.
 
     Internal attributes, that define the node itself,
     are stored in the DbAttribute table; further user-defined attributes,
@@ -150,7 +147,7 @@ class DbNode(m.Model):
        can be redefined if the code has to be recompiled).
     """
     uuid = UUIDField(auto=True, version=AIIDANODES_UUID_VERSION, db_index=True)
-    # in the form data.upffile., data.structure., calculation., code.quantumespresso.pw., ...
+    # in the form data.upffile., data.structure., calculation., ...
     # Note that there is always a final dot, to allow to do queries of the
     # type (type__startswith="calculation.") and avoid problems with classes
     # starting with the same string
@@ -159,8 +156,8 @@ class DbNode(m.Model):
     label = m.CharField(max_length=255, db_index=True, blank=True)
     description = m.TextField(blank=True)
     # creation time
-    ctime = m.DateTimeField(default=timezone.now, editable=False)
-    mtime = m.DateTimeField(auto_now=True, editable=False)
+    ctime = m.DateTimeField(default=timezone.now, db_index=True, editable=False)
+    mtime = m.DateTimeField(auto_now=True, db_index=True, editable=False)
     # Cannot delete a user if something is associated to it
     user = m.ForeignKey(AUTH_USER_MODEL, on_delete=m.PROTECT,
                         related_name='dbnodes')
@@ -168,9 +165,6 @@ class DbNode(m.Model):
     # Direct links
     outputs = m.ManyToManyField('self', symmetrical=False,
                                 related_name='inputs', through='DbLink')
-    # Transitive closure
-    children = m.ManyToManyField('self', symmetrical=False,
-                                 related_name='parents', through='DbPath')
 
     # Used only if dbnode is a calculation, or remotedata
     # Avoid that computers can be deleted if at least a node exists pointing
@@ -195,7 +189,7 @@ class DbNode(m.Model):
         appropriate subclass.
         """
         from aiida.orm.node import Node
-        from aiida.common.pluginloader import from_type_to_pluginclassname
+        from aiida.common.old_pluginloader import from_type_to_pluginclassname
         from aiida.common.pluginloader import load_plugin
         from aiida.common import aiidalogger
 
@@ -302,50 +296,6 @@ class DbLink(m.Model):
             self.output.get_simple_name(invalid_result="Unknown node"),
             self.output.pk, )
 
-
-@python_2_unicode_compatible
-class DbPath(m.Model):
-    """
-    Transitive closure table for all dbnode paths.
-    """
-    parent = m.ForeignKey('DbNode', related_name='child_paths', editable=False)
-    child = m.ForeignKey('DbNode', related_name='parent_paths', editable=False)
-    depth = m.IntegerField(editable=False)
-
-    # Used to delete or to expand the path
-    entry_edge_id = m.IntegerField(null=True, editable=False)
-    direct_edge_id = m.IntegerField(null=True, editable=False)
-    exit_edge_id = m.IntegerField(null=True, editable=False)
-
-    def __str__(self):
-        return "{} ({}) ==[{}]==>> {} ({})".format(
-            self.parent.get_simple_name(invalid_result="Unknown node"),
-            self.parent.pk,
-            self.depth,
-            self.child.get_simple_name(invalid_result="Unknown node"),
-            self.child.pk, )
-
-    def expand(self):
-        """
-        Method to expand a DbPath (recursive function), i.e., to get a list
-        of all dbnodes that are traversed in the given path.
-
-        :return: list of DbNode objects representing the expanded DbPath
-        """
-
-        if self.depth == 0:
-            return [self.parent, self.child]
-        else:
-            path_entry = []
-            path_direct = DbPath.objects.get(id=self.direct_edge_id).expand()
-            path_exit = []
-            # we prevent DbNode repetitions
-            if self.entry_edge_id != self.direct_edge_id:
-                path_entry = DbPath.objects.get(id=self.entry_edge_id).expand()[:-1]
-            if self.exit_edge_id != self.direct_edge_id:
-                path_exit = DbPath.objects.get(id=self.exit_edge_id).expand()[1:]
-
-            return path_entry + path_direct + path_exit
 
 
 attrdatatype_choice = (
@@ -647,7 +597,7 @@ class DbMultipleValueAttributeBaseClass(m.Model):
     dval = m.DateTimeField(default=None, null=True)
 
     # separator for subfields
-    _sep = "."
+    _sep = AIIDA_ATTRIBUTE_SEP
 
     class Meta:
         abstract = True
@@ -690,16 +640,8 @@ class DbMultipleValueAttributeBaseClass(m.Model):
         :return: None if the key is valid
         :raise ValidationError: if the key is not valid
         """
-        from aiida.common.exceptions import ValidationError
-
-        if not isinstance(key, basestring):
-            raise ValidationError("The key must be a string.")
-        if not key:
-            raise ValidationError("The key cannot be an empty string.")
-        if cls._sep in key:
-            raise ValidationError("The separator symbol '{}' cannot be present "
-                                  "in the key of a {}.".format(
-                cls._sep, cls.__name__))
+        from aiida.backends.utils import validate_attribute_key
+        return validate_attribute_key(key)
 
     @classmethod
     def set_value(cls, key, value, with_transaction=True,
@@ -1835,8 +1777,8 @@ class DbWorkflowData(m.Model):
                 self.json_value = json.dumps(arg)
                 self.value_type = wf_data_value_types.JSON
                 self.save()
-        except:
-            raise ValueError("Cannot set the parameter {}".format(self.name))
+        except Exception as exc:
+            reraise(ValueError, "Cannot set the parameter {}".format(self.name), sys.exc_info()[2])
 
     def get_value(self):
         import json

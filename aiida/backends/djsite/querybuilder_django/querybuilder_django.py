@@ -23,8 +23,8 @@ from sqlalchemy.types import Float,  String
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
-from sqlalchemy.sql.expression import cast
-from sqlalchemy.sql.elements import Cast
+from sqlalchemy.sql.expression import cast, ColumnClause
+from sqlalchemy.sql.elements import Cast, Label
 from aiida.common.exceptions import InputValidationError
 from aiida.backends.general.querybuilder_interface import QueryBuilderInterface
 from aiida.backends.utils import _get_column
@@ -83,12 +83,12 @@ class QueryBuilderImplDjango(QueryBuilderInterface):
     def AiidaNode(self):
         import aiida.orm.implementation.django.node
         return aiida.orm.implementation.django.node.Node
-        
+
     @property
     def AiidaGroup(self):
         import aiida.orm.implementation.django.group
         return aiida.orm.implementation.django.group.Group
-        
+
     @property
     def AiidaUser(self):
         import aiida.orm.implementation.django.user
@@ -102,7 +102,9 @@ class QueryBuilderImplDjango(QueryBuilderInterface):
 
     def get_filter_expr_from_column(self, operator, value, column):
 
-        if not isinstance(column, (Cast, InstrumentedAttribute)):
+        # Label is used because it is what is returned for the
+        # 'state' column by the hybrid_column construct
+        if not isinstance(column, (Cast, InstrumentedAttribute, Label, ColumnClause)):
             raise TypeError(
                 'column ({}) {} is not a valid column'.format(
                     type(column), column
@@ -278,14 +280,6 @@ class QueryBuilderImplDjango(QueryBuilderInterface):
         if negation:
             return not_(expr)
         return expr
-
-
-
-
-    def prepare_with_dbpath(self):
-        #~ from aiida.backends.querybuild.dummy_model import DbPath as DummyPath
-        self.Path = dummy_model.DbPath
-
 
 
     def get_session(self):
@@ -510,7 +504,7 @@ class QueryBuilderImplDjango(QueryBuilderInterface):
         elif key == 'extras':
             # same as attributes
             return DbExtra.get_all_values_for_nodepk(res)
-        elif key in ('_metadata', 'transport_params'):
+        elif key in ('_metadata', 'transport_params') and res is not None:
             # Metadata and transport_params are stored as json strings in the DB:
             return json_loads(res)
         elif isinstance(res, (self.Group, self.Node, self.Computer, self.User)):
@@ -592,10 +586,8 @@ class QueryBuilderImplDjango(QueryBuilderInterface):
                 # The only valid string at this point is a string
                 # that matches exactly the _plugin_type_string
                 # of a node class
-                from aiida.common.pluginloader import (
-                        from_type_to_pluginclassname,
-                        load_plugin
-                    )
+                from aiida.common.old_pluginloader import from_type_to_pluginclassname
+                from aiida.common.pluginloader import load_plugin
                 ormclass = self.Node
                 try:
                     pluginclassname = from_type_to_pluginclassname(ormclasstype)
@@ -606,7 +598,7 @@ class QueryBuilderImplDjango(QueryBuilderInterface):
                     # In the future, assuming the user knows what he or she is doing
                     # we could remove that check
                     # The query_type_string we can get from
-                    # the aiida.common.pluginloader function get_query_type_string
+                    # the aiida.common.old_pluginloader function get_query_type_string
                     PluginClass = load_plugin(self.AiidaNode, 'aiida.orm', pluginclassname)
                 except (DbContentError, MissingPluginError) as e:
                     raise InputValidationError(

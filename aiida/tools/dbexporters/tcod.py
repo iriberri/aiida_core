@@ -67,7 +67,7 @@ tcod_loops = {
 conforming_dictionaries = [
     {
         'name': 'cif_tcod.dic',
-        'version': '0.009',
+        'version': '0.010',
         'url': 'http://www.crystallography.net/tcod/cif/dictionaries/cif_tcod.dic'
     },
     {
@@ -333,9 +333,10 @@ def _get_calculation(node):
     """
     from aiida.common.exceptions import MultipleObjectsError
     from aiida.orm.calculation import Calculation
-    if len(node.get_inputs(node_type=Calculation)) == 1:
-        return node.get_inputs(node_type=Calculation)[0]
-    elif len(node.get_inputs(node_type=Calculation)) == 0:
+    from aiida.common.links import LinkType
+    if len(node.get_inputs(node_type=Calculation, link_type=LinkType.CREATE)) == 1:
+        return node.get_inputs(node_type=Calculation, link_type=LinkType.CREATE)[0]
+    elif len(node.get_inputs(node_type=Calculation, link_type=LinkType.CREATE)) == 0:
         return None
     else:
         raise MultipleObjectsError("Node {} seems to have more than one "
@@ -385,16 +386,18 @@ def _inline_to_standalone_script(calc):
     args = ["{}=load_node('{}')".format(x, input_dict[x].uuid)
             for x in input_dict.keys()]
     args_string = ",\n    ".join(sorted(args))
+    code_string = calc.get_attr('source_file').encode('utf-8')
+    if calc.get_attr('namespace', '__main__').startswith('aiida.'):
+        code_string = "from {} import {}".format(calc.get_attr('namespace', '__main__'),
+                                                 calc.get_attr('function_name','f'))
     return """#!/usr/bin/env runaiida
 {}
 
 for key, value in {}(
     {}
-    )[1].iteritems():
+    ).iteritems():
     value.store()
-""".format(calc.get_attr('source_file').encode('utf-8'),
-           calc.get_attr('function_name','f'),
-           args_string)
+""".format(code_string, calc.get_attr('function_name','f'), args_string)
 
 
 def _collect_calculation_data(calc):
@@ -402,14 +405,17 @@ def _collect_calculation_data(calc):
     Recursively collects calculations from the tree, starting at given
     calculation.
     """
+    from aiida.common.links import LinkType
     from aiida.orm.data import Data
     from aiida.orm.calculation import Calculation
     from aiida.orm.calculation.job import JobCalculation
+    from aiida.orm.calculation.work import WorkCalculation
     from aiida.orm.calculation.inline import InlineCalculation
+    import hashlib
     import os
     calcs_now = []
-    for d in calc.get_inputs(node_type=Data):
-        for c in d.get_inputs(node_type=Calculation):
+    for d in calc.get_inputs(node_type=Data, link_type=LinkType.INPUT):
+        for c in d.get_inputs(node_type=Calculation, link_type=LinkType.CREATE):
             calcs = _collect_calculation_data(c)
             calcs_now.extend(calcs)
 
@@ -425,11 +431,34 @@ def _collect_calculation_data(calc):
         files_in  = _collect_files(calc._raw_input_folder.abspath)
         files_out = _collect_files(os.path.join(retrieved_abspath, 'path'))
         this_calc['env'] = calc.get_environment_variables()
-        this_calc['stdout'] = calc.get_scheduler_output()
-        this_calc['stderr'] = calc.get_scheduler_error()
-    else:
+        stdout_name = '{}.out'.format(aiida_executable_name)
+        while stdout_name in [files_in,files_out]:
+            stdout_name = '_{}'.format(stdout_name)
+        stderr_name = '{}.err'.format(aiida_executable_name)
+        while stderr_name in [files_in,files_out]:
+            stderr_name = '_{}'.format(stderr_name)
+        if calc.get_scheduler_output() is not None:
+            files_out.append({
+                'name'    : stdout_name,
+                'contents': calc.get_scheduler_output(),
+                'md5'     : hashlib.md5(calc.get_scheduler_output()).hexdigest(),
+                'sha1'    : hashlib.sha1(calc.get_scheduler_output()).hexdigest(),
+                'role'    : 'stdout',
+                'type'    : 'file',
+                })
+            this_calc['stdout'] = stdout_name
+        if calc.get_scheduler_error() is not None:
+            files_out.append({
+                'name'    : stderr_name,
+                'contents': calc.get_scheduler_error(),
+                'md5'     : hashlib.md5(calc.get_scheduler_error()).hexdigest(),
+                'sha1'    : hashlib.sha1(calc.get_scheduler_error()).hexdigest(),
+                'role'    : 'stderr',
+                'type'    : 'file',
+                })
+            this_calc['stderr'] = stderr_name
+    elif isinstance(calc, InlineCalculation):
         # Calculation is InlineCalculation
-        import hashlib
         python_script = _inline_to_standalone_script(calc)
         files_in.append({
             'name'    : inline_executable_name,
@@ -446,6 +475,12 @@ def _collect_calculation_data(calc):
             'sha1'    : hashlib.sha1(shell_script).hexdigest(),
             'type'    : 'file',
             })
+    elif isinstance(calc, WorkCalculation):
+        # We do not know how to recreate a WorkCalculation so we pass
+        pass
+    else:
+        raise ValueError('calculation is of an unexpected type {}'.format(type(calc)))
+
 
     for f in files_in:
         if os.path.basename(f['name']) == aiida_executable_name:
@@ -457,7 +492,8 @@ def _collect_calculation_data(calc):
     for f in files_out:
         if os.path.basename(f['name']) != calc._SCHED_OUTPUT_FILE and \
            os.path.basename(f['name']) != calc._SCHED_ERROR_FILE:
-            f['role'] = 'output'
+            if 'role' not in f.keys():
+                f['role'] = 'output'
             this_calc['files'].append(f)
 
     calcs_now.append(this_calc)
@@ -471,6 +507,10 @@ def _collect_files(base, path=''):
     from aiida.common.folders import Folder
     from aiida.common.utils import md5_file,sha1_file
     import os
+
+    def get_filename(file_dict):
+        return file_dict['name']
+
     if os.path.isdir(os.path.join(base,path)):
         folder = Folder(os.path.join(base,path))
         files_now = []
@@ -482,10 +522,34 @@ def _collect_files(base, path=''):
                     'name': path,
                     'type': 'folder',
                 })
-        for f in sorted(folder.get_content_list()):
+        for f in folder.get_content_list():
             files = _collect_files(base,path=os.path.join(path,f))
             files_now.extend(files)
-        return files_now
+        return sorted(files_now,key=get_filename)
+    elif path == '.aiida/calcinfo.json':
+        files = []
+        with open(os.path.join(base,path)) as f:
+            files.append({
+                'name': path,
+                'contents': f.read(),
+                'md5': md5_file(os.path.join(base,path)),
+                'sha1': sha1_file(os.path.join(base,path)),
+                'type': 'file',
+                })
+        import json
+        with open(os.path.join(base,path)) as f:
+            calcinfo = json.load(f)
+        if 'local_copy_list' in calcinfo:
+            for local_copy in calcinfo['local_copy_list']:
+                with open(local_copy[0]) as f:
+                    files.append({
+                        'name': os.path.normpath(local_copy[1]),
+                        'contents': f.read(),
+                        'md5': md5_file(local_copy[0]),
+                        'sha1': sha1_file(local_copy[0]),
+                        'type': 'file',
+                        })
+        return files
     else:
         with open(os.path.join(base,path)) as f:
             return [{
@@ -579,6 +643,7 @@ def _collect_tags(node, calc,parameters=None,
     Retrieve metadata from attached calculation and pseudopotentials
     and prepare it to be saved in TCOD CIF.
     """
+    from aiida.common.links import LinkType
     import os, json
     import aiida
     tags = { '_audit_creation_method': "AiiDA version {}".format(aiida.__version__) }
@@ -607,8 +672,7 @@ def _collect_tags(node, calc,parameters=None,
 
     export_files = []
 
-    sn = 0
-    fn = 0
+    sn = 1
     for step in calc_data:
         tags['_tcod_computation_step'].append(sn)
         tags['_tcod_computation_command'].append(
@@ -620,20 +684,10 @@ def _collect_tags(node, calc,parameters=None,
         else:
             tags['_tcod_computation_environment'].append('')
         if 'stdout' in step and step['stdout'] is not None:
-            if cif_encode_contents(step['stdout'])[1] is not None:
-                raise ValueError("Standard output of computation step {} "
-                                 "can not be stored in a CIF file: "
-                                 "encoding is required, but not currently "
-                                 "supported".format(sn))
             tags['_tcod_computation_stdout'].append(step['stdout'])
         else:
             tags['_tcod_computation_stdout'].append('')
         if 'stderr' in step and step['stderr'] is not None:
-            if cif_encode_contents(step['stderr'])[1] is not None:
-                raise ValueError("Standard error of computation step {} "
-                                 "can not be stored in a CIF file: "
-                                 "encoding is required, but not currently "
-                                 "supported".format(sn))
             tags['_tcod_computation_stderr'].append(step['stderr'])
         else:
             tags['_tcod_computation_stderr'].append('')
@@ -750,7 +804,7 @@ def _collect_tags(node, calc,parameters=None,
 
     if calc is not None:
         from aiida.orm.data.array.kpoints import KpointsData
-        kpoints_list = calc.get_inputs(KpointsData)
+        kpoints_list = calc.get_inputs(KpointsData, link_type=LinkType.INPUT)
         # TODO: stop if more than one KpointsData is used?
         if len(kpoints_list) == 1:
             kpoints = kpoints_list[0]
@@ -762,31 +816,23 @@ def _collect_tags(node, calc,parameters=None,
             tags['_dft_BZ_integration_grid_shift_Y'] = shift[1]
             tags['_dft_BZ_integration_grid_shift_Z'] = shift[2]
 
-    # Collecting code-specific data
-
-    from aiida.common.pluginloader import BaseFactory, existing_plugins
-    from aiida.tools.dbexporters.tcod_plugins import BaseTcodtranslator
-
-    plugin_path = "aiida.tools.dbexporters.tcod_plugins"
-    plugins = list()
-
-    if calc is not None:
-        for plugin in existing_plugins(BaseTcodtranslator, plugin_path):
-            cls = BaseFactory(plugin, BaseTcodtranslator, plugin_path)
-            if calc._plugin_type_string.endswith(cls._plugin_type_string + '.'):
-                plugins.append(cls)
-
     from aiida.common.exceptions import MultipleObjectsError
+    from aiida.common.pluginloader import all_plugins, get_plugin
 
-    if len(plugins) > 1:
-        raise MultipleObjectsError("more than one plugin found for "
-                                   "{}".calc._plugin_type_string)
+    # Collecting code-specific data
+    if calc is not None:
+        category = 'tools.dbexporters.tcod_plugins'
+        plugins = all_plugins(category)
 
-    if len(plugins) == 1:
-        plugin = plugins[0]
-        translated_tags = translate_calculation_specific_values(calc,
-                                                                plugin)
-        tags.update(translated_tags)
+        if len(plugins) > 1:
+            raise MultipleObjectsError('more than one plugin found for {}'.format(category))
+
+        if len(plugins) == 1:
+            plugin = get_plugin(category, plugins[0])
+
+            if calc._plugin_type_string.endswith(plugin._plugin_type_string + '.'):
+                translated_tags = translate_calculation_specific_values(calc, plugin)
+                tags.update(translated_tags)
 
     return tags
 
@@ -863,7 +909,7 @@ def export_cif(what, **kwargs):
     :return: string with contents of CIF file.
     """
     cif = export_cifnode(what, **kwargs)
-    return cif._exportstring('cif')
+    return cif._exportstring('cif')[0]
 
 
 def export_values(what, **kwargs):
@@ -912,6 +958,7 @@ def export_cifnode(what, parameters=None, trajectory_index=None,
         Default 1024.
     :return: a :py:class:`aiida.orm.data.cif.CifData` node.
     """
+    from aiida.common.links import LinkType
     from aiida.common.exceptions import MultipleObjectsError
     from aiida.orm.calculation.inline import make_inline
     CifData        = DataFactory('cif')
@@ -926,7 +973,7 @@ def export_cifnode(what, parameters=None, trajectory_index=None,
             raise ValueError("Supplied parameters are not an "
                              "instance of ParameterData")
     elif calc is not None:
-        params = calc.get_outputs(type=ParameterData)
+        params = calc.get_outputs(type=ParameterData, link_type=LinkType.CREATE)
         if len(params) == 1:
             parameters = params[0]
         elif len(params) > 0:

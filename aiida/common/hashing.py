@@ -11,7 +11,6 @@ from passlib.context import CryptContext
 import random
 import hashlib
 import time
-import numpy as np
 from datetime import datetime
 
 """
@@ -36,9 +35,6 @@ pwd_context = CryptContext(
     schemes=["pbkdf2_sha256", "des_crypt"],
     # The default hashing mechanism
     default="pbkdf2_sha256",
-
-    # vary rounds parameter randomly when creating new hashes...
-    all__vary_rounds=0.1,
 
     # We set the number of rounds that should be used...
     pbkdf2_sha256__default_rounds=8000,
@@ -185,6 +181,8 @@ def make_hash(object_to_hash, float_precision=12):
     the string of dictionary do not suffice if we want to check for equality
     of dictionaries using hashes.
     """
+    import numpy as np
+
     if isinstance(object_to_hash, (tuple, list)):
         hashes = tuple([
                 make_hash(_, float_precision=float_precision)

@@ -15,11 +15,20 @@ import json
 # The username (email) used by the default superuser, that should also run
 # as the daemon
 from aiida.common.exceptions import ConfigurationError
-
+from aiida.utils.find_folder import find_path
+from .additions.config_migrations import check_and_migrate_config, add_config_version
 
 DEFAULT_AIIDA_USER = "aiida@localhost"
 
-AIIDA_CONFIG_FOLDER = "~/.aiida"
+AIIDA_PATH = [path for path in os.environ.get('AIIDA_PATH', '').split(':') if path] + [os.path.expanduser('~')]
+for path in AIIDA_PATH:
+    try:
+        AIIDA_CONFIG_FOLDER = str(find_path(root=path, dir_name='.aiida'))
+        break
+    except OSError:
+        pass
+else:
+    AIIDA_CONFIG_FOLDER = "~/.aiida"
 CONFIG_FNAME = 'config.json'
 SECRET_KEY_FNAME = 'secret_key.dat'
 
@@ -36,7 +45,7 @@ DEFAULT_USER_CONFIG_FIELD = 'default_user_email'
 DEFAULT_PROCESS = 'verdi'
 
 # The default umask for file creation under AIIDA_CONFIG_FOLDER
-DEFAULT_UMASK = 0077
+DEFAULT_UMASK = 0o0077
 
 # Profile keys
 aiidadb_backend_key = "AIIDADB_BACKEND"
@@ -50,6 +59,10 @@ TEMP_TEST_REPO = None
 # Keyword that is used in test profiles, databases and repositories to
 # differentiate them from non-testing ones.
 TEST_KEYWORD = "test_"
+
+
+def get_aiida_dir():
+    return os.path.expanduser(AIIDA_CONFIG_FOLDER)
 
 
 def backup_config():
@@ -72,8 +85,15 @@ def get_config():
     """
     Return all the configurations
     """
+    return check_and_migrate_config(_load_config())
+
+
+def _load_config():
+    """
+    Return the current configurations, without checking their version.
+    """
     import json
-    from aiida.common.exceptions import ConfigurationError
+    from aiida.common.exceptions import MissingConfigurationError
     from aiida.backends.settings import IN_DOC_MODE, DUMMY_CONF_FILE
 
     if IN_DOC_MODE:
@@ -86,14 +106,13 @@ def get_config():
             return json.load(json_file)
     except IOError:
         # No configuration file
-        raise ConfigurationError("No configuration file found")
-
+        raise MissingConfigurationError("No configuration file found")
 
 def get_or_create_config():
-    from aiida.common.exceptions import ConfigurationError
+    from aiida.common.exceptions import MissingConfigurationError
     try:
         config = get_config()
-    except ConfigurationError:
+    except MissingConfigurationError:
         config = {}
         store_config(config)
     return config
@@ -398,20 +417,12 @@ def get_profile_config(profile, conf_dict=None, set_test_location=True):
 
     test_string = ""
     # is_test = False
-    # use_sqlite_for_tests = False
     # test_prefix = "test_"
-    # sqlitetest_prefix = "testsqlite_"
     # if profile.startswith(test_prefix):
     #     # Use the same profile
     #     profile = profile[len(test_prefix):]
     #     is_test = True
     #     test_string = "(test) "
-    # elif profile.startswith(sqlitetest_prefix):
-    #     # Use the same profile
-    #     profile = profile[len(sqlitetest_prefix):]
-    #     is_test = True
-    #     use_sqlite_for_tests = True
-    #     test_string = "(sqlite-test) "
 
     try:
         profile_info = confs['profiles'][profile]
@@ -444,10 +455,6 @@ def get_profile_config(profile, conf_dict=None, set_test_location=True):
     #         raise ConfigurationError("Config file has not been found, run "
     #                                  "verdi install first")
     #     profile_info['AIIDADB_REPOSITORY_URI'] = 'file://' + TEMP_TEST_REPO
-    #
-    #     if use_sqlite_for_tests:
-    #         profile_info['AIIDADB_ENGINE'] = 'sqlite3'
-    #         profile_info['AIIDADB_NAME'] = ":memory:"
 
     return profile_info
 
@@ -582,7 +589,7 @@ def create_configuration(profile='default'):
     :return: The populated profile that was also stored.
     """
     import readline
-    from aiida.common.exceptions import ConfigurationError
+    from aiida.common.exceptions import MissingConfigurationError
     from validate_email import validate_email
     from aiida.common.utils import query_yes_no
 
@@ -599,7 +606,7 @@ def create_configuration(profile='default'):
 
     try:
         confs = get_config()
-    except ConfigurationError:
+    except MissingConfigurationError:
         # No configuration file found
         confs = {}
 
@@ -664,8 +671,7 @@ def create_configuration(profile='default'):
         # Setting the email
         valid_email = False
         readline.set_startup_hook(lambda: readline.insert_text(
-            this_existing_confs.get(DEFAULT_USER_CONFIG_FIELD,
-                                    DEFAULT_AIIDA_USER)))
+            this_existing_confs.get(DEFAULT_AIIDA_USER)))
         while not valid_email:
             this_new_confs[DEFAULT_USER_CONFIG_FIELD] = raw_input(
                 'Default user email: ')
@@ -677,7 +683,7 @@ def create_configuration(profile='default'):
         # Setting the database engine
         db_possibilities = []
         if aiida_backend == 'django':
-            db_possibilities.extend(['postgresql_psycopg2', 'sqlite', 'mysql'])
+            db_possibilities.extend(['postgresql_psycopg2', 'mysql'])
         elif aiida_backend == 'sqlalchemy':
             db_possibilities.extend(['postgresql_psycopg2'])
         if len(db_possibilities) > 0:
@@ -698,17 +704,7 @@ def create_configuration(profile='default'):
                            .format(', '.join(db_possibilities)))
             this_new_confs['AIIDADB_ENGINE'] = db_engine_ans
 
-        if 'sqlite' in this_new_confs['AIIDADB_ENGINE']:
-            this_new_confs['AIIDADB_ENGINE'] = 'sqlite3'
-            readline.set_startup_hook(lambda: readline.insert_text(
-                this_existing_confs.get('AIIDADB_NAME', os.path.join(aiida_dir, "aiida.db"))))
-            this_new_confs['AIIDADB_NAME'] = raw_input('AiiDA Database location: ')
-            this_new_confs['AIIDADB_HOST'] = ""
-            this_new_confs['AIIDADB_PORT'] = ""
-            this_new_confs['AIIDADB_USER'] = ""
-            this_new_confs['AIIDADB_PASS'] = ""
-
-        elif 'postgresql_psycopg2' in this_new_confs['AIIDADB_ENGINE']:
+        if 'postgresql_psycopg2' in this_new_confs['AIIDADB_ENGINE']:
             this_new_confs['AIIDADB_ENGINE'] = 'postgresql_psycopg2'
 
             old_host = this_existing_confs.get('AIIDADB_HOST', 'localhost')
@@ -795,7 +791,7 @@ def create_configuration(profile='default'):
             this_new_confs['AIIDADB_PASS'] = raw_input('AiiDA Database password: ')
         else:
             raise ValueError("You have to specify a valid database "
-                             "(valid choices are 'sqlite', 'mysql', 'postgres')")
+                             "(valid choices are 'mysql', 'postgres')")
 
         # This part for the time being is a bit oddly written
         # it should change in the future to add the possibility of having a
@@ -844,6 +840,7 @@ def create_configuration(profile='default'):
         confs['profiles'][profile] = this_new_confs
 
         backup_config()
+        add_config_version(confs)
         store_config(confs)
 
         return this_new_confs
@@ -887,11 +884,14 @@ _property_table = {
         "'aiida.backends.djsite.db.models:aiida.orm.querytool.Querytool'",
         "",
         None),
-    "tests.use_sqlite": (
-        "use_inmemory_sqlite_for_tests",
-        "bool",
-        "Whether to use an in-memory SQLite DB for tests",
-        True,
+    "verdishell.calculation_list": (
+        "projections_for_calculation_list",
+        "list_of_str",
+        "A list of the projections that should be shown by default "
+        "when typing 'verdi calculation list'. "
+        "Set by passing the projections space separated as a string, for example: "
+        "verdi devel setproperty verdishell.calculation_list 'pk time state'",
+        ('pk', 'ctime', 'state', 'sched', 'computer', 'type'),
         None),
     "logging.aiida_loglevel": (
         "logging_aiida_log_level",
@@ -907,6 +907,18 @@ _property_table = {
         "string",
         "Minimum level to log to the file ~/.aiida/daemon/log/aiida_daemon.log "
         "for the 'paramiko' logger",
+        "WARNING",
+        ["CRITICAL", "ERROR", "WARNING", "REPORT", "INFO", "DEBUG"]),
+    "logging.alembic_loglevel": (
+        "logging_alembic_log_level",
+        "string",
+        "Minimum level to log to the console",
+        "INFO",
+        ["CRITICAL", "ERROR", "WARNING", "REPORT", "INFO", "DEBUG"]),
+    "logging.sqlalchemy_loglevel": (
+        "logging_sqlalchemy_loglevel",
+        "string",
+        "Minimum level to log to the console",
         "WARNING",
         ["CRITICAL", "ERROR", "WARNING", "REPORT", "INFO", "DEBUG"]),
     "logging.celery_loglevel": (
@@ -974,7 +986,7 @@ def exists_property(name):
     :raise ValueError: if the given name is not a valid property (as stored in
       the _property_table dictionary).
     """
-    from aiida.common.exceptions import ConfigurationError
+    from aiida.common.exceptions import MissingConfigurationError
 
     try:
         key, _, _, table_defval, _ = _property_table[name]
@@ -984,7 +996,7 @@ def exists_property(name):
     try:
         config = get_config()
         return key in config
-    except ConfigurationError:  # No file found
+    except MissingConfigurationError:  # No file found
         return False
 
 
@@ -1001,7 +1013,7 @@ def get_property(name, default=_NoDefaultValue()):
     :raise KeyError: if the given property is not found in the config file, and
       no default value is given or provided in _property_table.
     """
-    from aiida.common.exceptions import ConfigurationError
+    from aiida.common.exceptions import MissingConfigurationError
     import aiida.utils.logger as logger
 
     try:
@@ -1013,7 +1025,7 @@ def get_property(name, default=_NoDefaultValue()):
     try:
         config = get_config()
         value = config[key]
-    except (KeyError, ConfigurationError):
+    except (KeyError, MissingConfigurationError):
         if isinstance(default, _NoDefaultValue):
             if isinstance(table_defval, _NoDefaultValue):
                 raise
@@ -1041,7 +1053,7 @@ def del_property(name):
     :param name: the name of the property to delete.
     :raise: KeyError if the key is not found in the configuration file.
     """
-    from aiida.common.exceptions import ConfigurationError
+    from aiida.common.exceptions import MissingConfigurationError
 
     try:
         key, _, _, _, _ = _property_table[name]
@@ -1051,7 +1063,7 @@ def del_property(name):
     try:
         config = get_config()
         del config[key]
-    except ConfigurationError:
+    except MissingConfigurationError:
         raise KeyError("No configuration file found")
 
     # If we are here, no exception was raised
@@ -1071,7 +1083,7 @@ def set_property(name, value):
       properties, or if the value provided as a string cannot be casted to the
       correct type.
     """
-    from aiida.common.exceptions import ConfigurationError
+    from aiida.common.exceptions import MissingConfigurationError
 
     try:
         key, type_string, _, _, valid_values = _property_table[name]
@@ -1094,6 +1106,9 @@ def set_property(name, value):
         actual_value = unicode(value)
     elif type_string == "int":
         actual_value = int(value)
+    elif type_string == 'list_of_str':
+        # I expect the results as a list of strings
+        actual_value = value.split()
     else:
         # Implement here other data types
         raise NotImplementedError("Type string '{}' not implemented yet".format(
@@ -1106,7 +1121,7 @@ def set_property(name, value):
 
     try:
         config = get_config()
-    except ConfigurationError:
+    except MissingConfigurationError:
         config = {}
 
     config[key] = actual_value

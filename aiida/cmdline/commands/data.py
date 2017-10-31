@@ -9,6 +9,8 @@
 ###########################################################################
 import sys
 
+import click
+
 from aiida.backends.utils import load_dbenv, is_dbenv_loaded
 from aiida.cmdline import delayed_load_node as load_node
 from aiida.cmdline.baseclass import (
@@ -40,6 +42,7 @@ class Data(VerdiCommandRouter):
             'parameter': _Parameter,
             'array': _Array,
             'label': _Label,
+            'remote': _Remote,
             'description': _Description,
         }
 
@@ -257,7 +260,7 @@ class Visualizable(object):
 
         parser.add_argument('--format', '-f', type=str, default=default_format,
                             help="Type of the visualization format/tool.",
-                            choices=self.get_show_plugins().keys())
+                            choices=sorted(self.get_show_plugins().keys()))
 
         # Augmenting the command line parameters with ones, that are used by
         # individual plugins
@@ -330,6 +333,16 @@ class Exportable(object):
     export_prefix = '_export_'
     export_parameters_postfix = '_parameters'
 
+    def append_export_cmdline_arguments(self, parser):
+        """
+        Function (to be overloaded in a subclass) to add custom export command
+        line arguments.
+
+        :param parser: a ArgParse parser object
+        :return: change the parser in place
+        """
+        pass
+
     def get_export_plugins(self):
         """
         Get the list of all implemented exporters for data class.
@@ -351,8 +364,16 @@ class Exportable(object):
         parser = argparse.ArgumentParser(
             prog=self.get_full_command_name(),
             description='Export data object.')
+        parser.add_argument('-o','--output', type=str, default='',
+                            help="If present, store the output directly on a file "
+                                 "with the given name. It is essential to use this option "
+                                 "if more than one file needs to be created.")
+        parser.add_argument('-y', '--overwrite', action='store_true',
+                            help="If passed, overwrite files without checking.")
         parser.add_argument('data_id', type=int, default=None,
                             help="ID of the data object to be visualized.")
+
+        self.append_export_cmdline_arguments(parser)
 
         default_format = None
         try:
@@ -365,7 +386,7 @@ class Exportable(object):
 
         parser.add_argument('--format', '-f', type=str, default=default_format,
                             help="Type of the exported file.",
-                            choices=self.get_export_plugins().keys())
+                            choices=sorted(self.get_export_plugins().keys()))
 
         # Augmenting the command line parameters with ones, that are used by
         # individual plugins
@@ -390,9 +411,21 @@ class Exportable(object):
             print >> sys.stderr, (
                 "Default format is not defined, please specify.\n"
                   "Valid formats are:")
-            for i in self.get_export_plugins().keys():
+            for i in sorted(self.get_export_plugins().keys()):
                 print >> sys.stderr, "  {}".format(i)
             sys.exit(1)
+
+        output_fname = parsed_args.pop('output')
+        if not output_fname:
+            output_fname = ""
+
+        overwrite = parsed_args.pop('overwrite')
+
+        #if parsed_args:
+        #    raise InternalError(
+        #        "Some command line parameters were not properly parsed: {}".format(
+        #            parsed_args.keys()
+        #        ))
 
         try:
             func = self.get_export_plugins()[format]
@@ -415,7 +448,50 @@ class Exportable(object):
         except AttributeError:
             pass
 
-        func(n, **parsed_args)
+        func(n, output_fname=output_fname, overwrite=overwrite, **parsed_args)
+
+    def print_or_store(self, node, output_fname, fileformat, other_args={}, overwrite=False):
+        """
+        Depending on the parameters, either print the (single) output file on screen, or
+        stores the file(s) on disk.
+
+        :param node: the Data node to print or store on disk
+        :param output_fname: The filename to store the main file. If empty or None, print
+             instead
+        :param fileformat: a string to pass to the _exportstring method
+        :param other_args: a dictionary with additional kwargs to pass to _exportstring
+        :param overwrite: if False, stops if any file already exists (when output_fname
+             is not empty
+
+        :note: this function calls directly sys.exit(1) when an error occurs (or e.g. if
+            check_overwrite is True and a file already exists).
+        """
+        try:
+            if output_fname:
+                try:
+                    node.export(
+                        output_fname, fileformat=fileformat, overwrite=overwrite, **other_args)
+                except OSError as e:
+                    print >> sys.stderr, "verdi: ERROR while exporting file:"
+                    print >> sys.stderr, e.message
+                    sys.exit(1)
+            else:
+                filetext, extra_files = node._exportstring(
+                    fileformat, main_file_name=output_fname, **other_args)
+                if extra_files:
+                    print >> sys.stderr, "This format requires to write more than one file."
+                    print >> sys.stderr, "You need to pass the -o option to specify a file name."
+                    sys.exit(1)
+                else:
+                    print filetext
+        except TypeError as e:
+            # This typically occurs for parameters that are passed down to the
+            # methods in, e.g., BandsData, but they are not accepted
+            print >> sys.stderr, "verdi: ERROR, probably a parameter is not supported by the specific format."
+            print >> sys.stderr, "Error message: {}".format(e.message)
+            raise
+
+            sys.exit(1)
 
 
 class Importable(object):
@@ -460,7 +536,7 @@ class Importable(object):
 
         parser.add_argument('--format', '-f', type=str, default=default_format,
                             help="Type of the imported file.",
-                            choices=self.get_import_plugins().keys())
+                            choices=sorted(self.get_import_plugins().keys()))
 
         # Augmenting the command line parameters with ones, that are used by
         # individual plugins
@@ -808,100 +884,12 @@ class _Bands(VerdiCommandWithSubcommands, Listable, Visualizable, Exportable):
         :return: table (list of lists) with information, describing nodes.
             Each row describes a single hit.
         """
+        from aiida.backends.utils import QueryFactory
         if not is_dbenv_loaded():
             load_dbenv()
 
-        from aiida.orm.querybuilder import QueryBuilder
-        from aiida.backends.utils import get_automatic_user
-        from aiida.orm.implementation import User
-        from aiida.orm.implementation import Group
-        from aiida.orm.data.structure import (get_formula, get_symbols_string)
-        from aiida.orm.data.array.bands import BandsData
-        from aiida.orm.data.structure import StructureData
-
-        qb = QueryBuilder()
-        if args.all_users is False:
-            au = get_automatic_user()
-            user = User(dbuser=au)
-            qb.append(User, tag="creator", filters={"email": user.email})
-        else:
-            qb.append(User, tag="creator")
-
-        bdata_filters = {}
-        self.query_past_days_qb(bdata_filters, args)
-        qb.append(BandsData, tag="bdata", created_by="creator",
-                  filters=bdata_filters,
-                  project=["id", "label", "ctime"]
-                  )
-
-        group_filters = {}
-        self.query_group_qb(group_filters, args)
-        if group_filters:
-            qb.append(Group, tag="group", filters=group_filters,
-                      group_of="bdata")
-
-        qb.append(StructureData, tag="sdata", ancestor_of="bdata",
-                  # We don't care about the creator of StructureData
-                  project=["id", "attributes.kinds", "attributes.sites"])
-
-        qb.order_by({StructureData: {'ctime': 'desc'}})
-
-        list_data = qb.distinct()
-
-        entry_list = []
-        already_visited_bdata = set()
-        if list_data.count() > 0:
-            for [bid, blabel, bdate, sid, akinds, asites] in list_data.all():
-
-                # We process only one StructureData per BandsData.
-                # We want to process the closest StructureData to
-                # every BandsData.
-                # We hope that the StructureData with the latest
-                # creation time is the closest one.
-                # This will be updated when the QueryBuilder supports
-                # order_by by the distance of two nodes.
-                if already_visited_bdata.__contains__(bid):
-                    continue
-                already_visited_bdata.add(bid)
-
-                if args.element is not None:
-                    all_symbols = [_["symbols"][0] for _ in akinds]
-                    if not any([s in args.element for s in all_symbols]
-                               ):
-                        continue
-
-                if args.element_only is not None:
-                    all_symbols = [_["symbols"][0] for _ in akinds]
-                    if not all(
-                            [s in all_symbols for s in args.element_only]
-                            ):
-                        continue
-
-                # We want only the StructureData that have attributes
-                if akinds is None or asites is None:
-                    continue
-
-                symbol_dict = {}
-                for k in akinds:
-                    symbols = k['symbols']
-                    weights = k['weights']
-                    symbol_dict[k['name']] = get_symbols_string(symbols,
-                                                                weights)
-
-                try:
-                    symbol_list = []
-                    for s in asites:
-                        symbol_list.append(symbol_dict[s['kind_name']])
-                    formula = get_formula(symbol_list,
-                                          mode=args.formulamode)
-                # If for some reason there is no kind with the name
-                # referenced by the site
-                except KeyError:
-                    formula = "<<UNKNOWN>>"
-                entry_list.append([str(bid), str(formula),
-                                   bdate.strftime('%d %b %Y'), blabel])
-
-        return entry_list
+        q = QueryFactory()()
+        return q.get_bands_and_parents_structure(args)
 
     def append_list_cmdline_arguments(self, parser):
         """
@@ -935,6 +923,23 @@ class _Bands(VerdiCommandWithSubcommands, Listable, Visualizable, Exportable):
                             help="show groups for all users, rather than only for the"
                                  "current user")
 
+    def append_export_cmdline_arguments(self, parser):
+        """
+        Additional command line arguments for the 'export' command
+
+        :param parser: instance of argparse.ArgumentParser
+        """
+        from aiida.common.utils import Prettifier
+
+        parser.add_argument('--prettify-format', type=str, default=None,
+                            choices=Prettifier.get_prettifiers(),
+                            help = 'The style of labels for the prettifier')
+        parser.add_argument('--y-min-lim', type=float, default=None,
+                            help = 'The minimum value for the y axis. Default: minimum of all bands')
+        parser.add_argument('--y-max-lim', type=float, default=None,
+                            help = 'The maximum value for the y axis. Default: maximum of all bands')
+
+
     def get_column_names(self):
         """
         Return the list with column names.
@@ -944,29 +949,95 @@ class _Bands(VerdiCommandWithSubcommands, Listable, Visualizable, Exportable):
         """
         return ["ID", "formula", "ctime", "label"]
 
-    def _export_xmgrace(self, node):
+    def _export_agr(self, node, output_fname, overwrite, **kwargs):
         """
         Export a .agr file, to be visualized with the XMGrace plotting software.
         """
-        agrtext = node._exportstring('agr')
-        print agrtext
+        self.print_or_store(node, output_fname, fileformat='agr', overwrite=overwrite,
+                            other_args=kwargs)
 
-    def _export_dat_multicolumn(self, node):
+
+    def _export_agr_batch(self, node, output_fname, overwrite, **kwargs):
+        """
+        Export a .agr batch file, to be visualized with the XMGrace plotting software.
+        """
+        self.print_or_store(node, output_fname, fileformat='agr_batch', overwrite=overwrite,
+                            other_args=kwargs)
+
+    def _export_gnuplot(self, node, output_fname, overwrite, **kwargs):
+        """
+        Export a Gnuplot file, together with the corresponding .dat file,
+        to be visualized with the Gnuplot plotting software.
+
+        Run with 'gnuplot -p filename' to see the plot (and keep the window with
+        the plot open).
+        """
+        self.print_or_store(node, output_fname, fileformat='gnuplot', overwrite=overwrite,
+                            other_args=kwargs)
+
+    def _export_dat_multicolumn(self, node, output_fname, overwrite, **kwargs):
         """
         Export a .dat file with one line per kpoint, with multiple energy values
         on the same line separated by spaces.
         """
-        agrtext = node._exportstring('dat_1')
-        print agrtext
+        self.print_or_store(node, output_fname, fileformat='dat_multicolumn', overwrite=overwrite,
+                            other_args=kwargs)
 
-    def _export_dat_blocks(self, node):
+    def _export_dat_blocks(self, node, output_fname, overwrite, **kwargs):
         """
         Export a .dat file with one line per datapoint (kpt, energy),
         with multiple bands separated in stanzas (i.e. having at least an empty
         newline inbetween).
         """
-        agrtext = node._exportstring('dat_2')
-        print agrtext
+        self.print_or_store(node, output_fname, fileformat='dat_blocks', overwrite=overwrite,
+                            other_args=kwargs)
+
+    def _export_json(self, node, output_fname, overwrite, **kwargs):
+        """
+        Export a .dat file with one line per datapoint (kpt, energy),
+        with multiple bands separated in stanzas (i.e. having at least an empty
+        newline inbetween).
+        """
+        self.print_or_store(node, output_fname, fileformat='json', overwrite=overwrite,
+                            other_args=kwargs)
+
+
+    def _export_mpl_singlefile(self, node, output_fname, overwrite, **kwargs):
+        """
+        Export a .py file that would produce the plot using matplotlib
+        when run with python (with data dumped within the same python file)
+        """
+        self.print_or_store(node, output_fname, fileformat='mpl_singlefile', overwrite=overwrite,
+                            other_args=kwargs)
+
+    def _export_mpl_withjson(self, node, output_fname, overwrite, **kwargs):
+        """
+        Export a .py file that would produce the plot using matplotlib
+        when run with python (with data dumped in an external json filee)
+        """
+        self.print_or_store(node, output_fname, fileformat='mpl_withjson', overwrite=overwrite,
+                            other_args=kwargs)
+
+
+    def _export_mpl_png(self, node, output_fname, overwrite, **kwargs):
+        """
+        Export a .png file generated using matplotlib
+        """
+        if not output_fname:
+            print >> sys.stderr, "To export to PNG please always specify the filename with the -o option"
+            sys.exit(1)
+        self.print_or_store(node, output_fname, fileformat='mpl_png', overwrite=overwrite,
+                            other_args=kwargs)
+
+    def _export_mpl_pdf(self, node, output_fname, overwrite, **kwargs):
+        """
+        Export a .pdf file generated using matplotlib
+        """
+        if not output_fname:
+            print >> sys.stderr, "To export to PDF please always specify the filename with the -o option"
+            sys.exit(1)
+        self.print_or_store(node, output_fname, fileformat='mpl_pdf', overwrite=overwrite,
+                            other_args=kwargs)
 
     def _show_xmgrace(self, exec_name, list_bands):
         """
@@ -980,7 +1051,7 @@ class _Bands(VerdiCommandWithSubcommands, Listable, Visualizable, Exportable):
         for iband, bands in enumerate(list_bands):
             # extract number of bands
             nbnds = bands.get_bands().shape[1]
-            text = bands._exportstring('agr', setnumber_offset=current_band_number,
+            text, _ = bands._exportstring('agr', setnumber_offset=current_band_number,
                                        color_number=numpy.mod(iband + 1, max_num_agr_colors))
             # write a tempfile
             f = tempfile.NamedTemporaryFile(suffix='.agr')
@@ -1156,7 +1227,7 @@ class _Structure(VerdiCommandWithSubcommands,
         structure = structure_list[0]
 
         with tempfile.NamedTemporaryFile(suffix='.xsf') as f:
-            f.write(structure._exportstring('xsf'))
+            f.write(structure._exportstring('xsf')[0])
             f.flush()
 
             try:
@@ -1197,7 +1268,7 @@ class _Structure(VerdiCommandWithSubcommands,
         structure = structure_list[0]
 
         with tempfile.NamedTemporaryFile(suffix='.xsf') as f:
-            f.write(structure._exportstring('xsf'))
+            f.write(structure._exportstring('xsf')[0])
             f.flush()
 
             try:
@@ -1223,7 +1294,7 @@ class _Structure(VerdiCommandWithSubcommands,
 
         with tempfile.NamedTemporaryFile() as f:
             for structure in structure_list:
-                f.write(structure._exportstring('cif'))
+                f.write(structure._exportstring('cif')[0])
             f.flush()
 
             try:
@@ -1241,7 +1312,7 @@ class _Structure(VerdiCommandWithSubcommands,
                 else:
                     raise
 
-    def _export_tcod(self, node, parameter_data=None, **kwargs):
+    def _export_tcod(self, node, output_fname, overwrite, parameter_data=None, **kwargs):
         """
         Plugin for TCOD
         """
@@ -1251,7 +1322,8 @@ class _Structure(VerdiCommandWithSubcommands,
             from aiida.orm import DataFactory
             ParameterData = DataFactory('parameter')
             parameters = load_node(parameter_data, parent_class=ParameterData)
-        print node._exportstring('tcod',parameters=parameters,**kwargs)
+        self.print_or_store(node, output_fname, fileformat='tcod', overwrite=overwrite,
+                            other_args=kwargs)
 
     def _export_tcod_parameters(self, parser, **kwargs):
         """
@@ -1260,23 +1332,26 @@ class _Structure(VerdiCommandWithSubcommands,
         from aiida.tools.dbexporters.tcod import extend_with_cmdline_parameters
         extend_with_cmdline_parameters(parser,self.dataclass.__name__)
 
-    def _export_xsf(self, node, **kwargs):
+    def _export_xsf(self, node, output_fname, overwrite, **kwargs):
         """
         Exporter to XSF.
         """
-        print node._exportstring('xsf')
+        self.print_or_store(node, output_fname, fileformat='xsf', overwrite=overwrite,
+                            other_args=kwargs)
 
-    def _export_cif(self, node, **kwargs):
+    def _export_cif(self, node, output_fname, overwrite, **kwargs):
         """
         Exporter to CIF.
         """
-        print node._exportstring('cif')
+        self.print_or_store(node, output_fname, fileformat='cif', overwrite=overwrite,
+                            other_args=kwargs)
 
-    def _export_xyz(self, node):
+    def _export_xyz(self, node, output_fname, overwrite, **kwargs):
         """
         Exporter to XYZ.
         """
-        print node._exportstring('xyz')
+        self.print_or_store(node, output_fname, fileformat='xyz', overwrite=overwrite,
+                            other_args=kwargs)
 
     def _import_xyz_parameters(self, parser):
         """
@@ -1415,7 +1490,7 @@ class _Cif(VerdiCommandWithSubcommands,
 
         with tempfile.NamedTemporaryFile() as f:
             for structure in structure_list:
-                f.write(structure._exportstring('cif'))
+                f.write(structure._exportstring('cif')[0])
             f.flush()
 
             try:
@@ -1485,13 +1560,15 @@ class _Cif(VerdiCommandWithSubcommands,
         """
         return ["ID", "formulae", "source_uri"]
 
-    def _export_cif(self, node, **kwargs):
+    def _export_cif(self, node, output_fname, overwrite, **kwargs):
         """
         Exporter to CIF.
         """
-        print node._exportstring('cif')
+        self.print_or_store(node, output_fname, fileformat='cif', overwrite=overwrite,
+                            other_args=kwargs)
 
-    def _export_tcod(self, node, parameter_data=None, **kwargs):
+
+    def _export_tcod(self, node, output_fname, overwrite, parameter_data=None, **kwargs):
         """
         Plugin for TCOD
         """
@@ -1500,7 +1577,8 @@ class _Cif(VerdiCommandWithSubcommands,
             from aiida.orm import DataFactory
             ParameterData = DataFactory('parameter')
             parameters = load_node(parameter_data, parent_class=ParameterData)
-        print node._exportstring('tcod',parameters=parameters,**kwargs)
+        self.print_or_store(node, output_fname, fileformat='tcod', overwrite=overwrite,
+                            other_args=kwargs)
 
     def _export_tcod_parameters(self,parser,**kwargs):
         """
@@ -1574,7 +1652,7 @@ class _Trajectory(VerdiCommandWithSubcommands,
 
         with tempfile.NamedTemporaryFile() as f:
             for trajectory in trajectory_list:
-                f.write(trajectory._exportstring('cif', **kwargs))
+                f.write(trajectory._exportstring('cif', **kwargs)[0])
             f.flush()
 
             try:
@@ -1613,7 +1691,7 @@ class _Trajectory(VerdiCommandWithSubcommands,
         trajectory = trajectory_list[0]
 
         with tempfile.NamedTemporaryFile(suffix='.xsf') as f:
-            f.write(trajectory._exportstring('xsf', **kwargs))
+            f.write(trajectory._exportstring('xsf', **kwargs)[0])
             f.flush()
 
             try:
@@ -1690,13 +1768,14 @@ class _Trajectory(VerdiCommandWithSubcommands,
             t.show_mpl_heatmap(**kwargs)
 
 
-    def _export_xsf(self, node, **kwargs):
+    def _export_xsf(self, node, output_fname, overwrite, **kwargs):
         """
         Exporter to XSF.
         """
-        print node._exportstring('xsf', **kwargs)
+        self.print_or_store(node, output_fname, fileformat='xsf', overwrite=overwrite,
+                            other_args=kwargs)
 
-    def _export_tcod(self, node, parameter_data=None, **kwargs):
+    def _export_tcod(self, node, output_fname, overwrite, parameter_data=None, **kwargs):
         """
         Plugin for TCOD
         """
@@ -1706,9 +1785,8 @@ class _Trajectory(VerdiCommandWithSubcommands,
             from aiida.orm import DataFactory
             ParameterData = DataFactory('parameter')
             parameters = load_node(parameter_data, parent_class=ParameterData)
-        print node._exportstring('tcod',
-                                 parameters=parameters,
-                                 **kwargs)
+        self.print_or_store(node, output_fname, fileformat='tcod', overwrite=overwrite,
+                            other_args=kwargs)
 
     def _export_tcod_parameters(self, parser, **kwargs):
         """
@@ -1717,11 +1795,13 @@ class _Trajectory(VerdiCommandWithSubcommands,
         from aiida.tools.dbexporters.tcod import extend_with_cmdline_parameters
         extend_with_cmdline_parameters(parser,self.dataclass.__name__)
 
-    def _export_cif(self, node, **kwargs):
+    def _export_cif(self, node, output_fname, overwrite, **kwargs):
         """
         Exporter to CIF.
         """
-        print node._exportstring('cif', **kwargs)
+        self.print_or_store(node, output_fname, fileformat='cif', overwrite=overwrite,
+                            other_args=kwargs)
+
 
     def _export_cif_parameters(self, parser, **kwargs):
         """
@@ -1817,3 +1897,146 @@ class _Array(VerdiCommandWithSubcommands, Visualizable):
             for arrayname in node.arraynames():
                 the_dict[arrayname] = node.get_array(arrayname).tolist()
             print_dictionary(the_dict, 'json+date')
+
+class _Remote(VerdiCommandWithSubcommands):
+    """
+    Manage RemoteData objects
+    """
+
+    def __init__(self):
+        self.valid_subcommands = {
+            'ls': (self.do_listdir, self.complete_none),
+            'cat': (self.do_cat, self.complete_none),
+            'show': (self.do_show, self.complete_none),
+        }
+
+    def do_listdir(self, *args):
+        """
+        List directory content on remote RemoteData objects.
+        """
+        import argparse
+        import datetime
+        from aiida.backends.utils import load_dbenv, is_dbenv_loaded
+        from aiida.common.utils import get_mode_string
+
+        parser = argparse.ArgumentParser(
+            prog=self.get_full_command_name(),
+            description='List directory content on remote RemoteData objects.')
+
+        parser.add_argument('-l', '--long', action='store_true',
+                      help="Display also file metadata")
+        parser.add_argument('pk', type=int, help="PK of the node")
+        parser.add_argument('path', nargs='?', default='.', help="The folder to list")
+
+        args = list(args)
+        parsed_args = parser.parse_args(args)
+
+        if not is_dbenv_loaded():
+            load_dbenv()
+
+        try:
+            n = load_node(parsed_args.pk)
+        except Exception as e:
+            click.echo(e.message, err=True)
+            sys.exit(1)
+        try:
+            content = n.listdir_withattributes(path=parsed_args.path)
+        except (IOError, OSError) as e:
+            click.echo("Unable to access the remote folder or file, check if it exists.", err=True)
+            click.echo("Original error: {}".format(str(e)), err=True)
+            sys.exit(1)
+        for metadata in content:
+            if parsed_args.long:
+                mtime = datetime.datetime.fromtimestamp(
+                    metadata['attributes'].st_mtime)
+                pre_line = '{} {:10}  {}  '.format(
+                    get_mode_string(metadata['attributes'].st_mode),
+                    metadata['attributes'].st_size,
+                    mtime.strftime("%d %b %Y %H:%M")
+                    )
+                click.echo(pre_line, nl=False)
+            if metadata['isdir']:
+                click.echo(click.style(metadata['name'], fg='blue'))
+            else:
+                click.echo(metadata['name'])
+
+    def do_cat(self, *args):
+        """
+        Show the content of remote files in RemoteData objects.
+        """
+        # Note: the implementation is not very efficient: if first downloads the full file on a file on the disk,
+        # then prints it and finally deletes the file.
+        # TODO: change it to open the file and stream it; it requires to add an openfile() method to the transport
+        import argparse
+        import datetime
+        from aiida.backends.utils import load_dbenv, is_dbenv_loaded
+        import tempfile
+        import os
+
+        parser = argparse.ArgumentParser(
+            prog=self.get_full_command_name(),
+            description='Show the content of remote files in RemoteData objects.')
+
+        parser.add_argument('pk', type=int, help="PK of the node")
+        parser.add_argument('path', type=str, help="The (relative) path to the file to show")
+
+        args = list(args)
+        parsed_args = parser.parse_args(args)
+
+        if not is_dbenv_loaded():
+            load_dbenv()
+
+        try:
+            n = load_node(parsed_args.pk)
+        except Exception as e:
+            click.echo(e.message, err=True)
+            sys.exit(1)
+
+        try:
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+                f.close()
+                n.getfile(parsed_args.path, f.name)
+                with open(f.name) as fobj:
+                    sys.stdout.write(fobj.read())
+        except IOError as e:
+            click.echo("ERROR {}: {}".format(e.errno, str(e)), err=True)
+            sys.exit(1)
+
+        try:
+            os.remove(f.name)
+        except OSError:
+            # If you cannot delete, ignore (maybe I didn't manage to create it in the first place
+            pass
+
+    def do_show(self, *args):
+        """
+        Show information on a RemoteData object.
+        """
+        import argparse
+        import datetime
+        from aiida.backends.utils import load_dbenv, is_dbenv_loaded
+        import tempfile
+        import os
+
+        parser = argparse.ArgumentParser(
+            prog=self.get_full_command_name(),
+            description='Show information on a RemoteData object.')
+
+        parser.add_argument('pk', type=int, help="PK of the node")
+
+        args = list(args)
+        parsed_args = parser.parse_args(args)
+
+        if not is_dbenv_loaded():
+            load_dbenv()
+
+        try:
+            n = load_node(parsed_args.pk)
+        except Exception as e:
+            click.echo(e.message, err=True)
+            sys.exit(1)
+
+        click.echo("- Remote computer name:")
+        click.echo("  {}".format(n.get_computer_name()))
+        click.echo("- Remote folder full path:")
+        click.echo("  {}".format(n.get_remote_path()))

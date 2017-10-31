@@ -1,3 +1,128 @@
+## v0.10.0rc2:
+
+### Major changes
+- The `DbPath` table has been removed and replaced with a dynamic transitive closure, because, among others, nested workchains could lead to the `DbPath` table exploding in size
+- Code plugins have been removed from `aiida_core` and have been migrated to their own respective plugin repositories and can be found here:
+    * [Quantum ESPRESSO](https://github.com/aiidateam/aiida-quantumespresso)
+    * [ASE](https://github.com/aiidateam/aiida-ase)
+    * [COD tools](https://github.com/aiidateam/aiida-codtools)
+    * [NWChem](https://github.com/aiidateam/aiida-nwchem)
+
+    Each can be installed from `pip` using e.g. `pip install aiida-quantumespresso`.
+    Existing installations will require a migration (see [update instructions in the documentation](https://aiida-core.readthedocs.io/en/v0.10.0/installation/updating.html#plugin-migration)).
+    For a complete overview of available plugins you can visit [the registry](https://aiidateam.github.io/aiida-registry/).
+
+### Improvements
+- New verdi command: `verdi work kill` to kill running workchains [[#821]](https://github.com/aiidateam/aiida_core/pull/821)
+- New verdi command: `verdi data remote [ls,cat,show]` to inspect the contents of `RemoteData` objects [[#743]](https://github.com/aiidateam/aiida_core/pull/743)
+- New verdi command: `verdi export migrate` allows the migration of existing export archives to new formats [[#781]](https://github.com/aiidateam/aiida_core/pull/781)
+- New verdi command: `verdi profile delete` [[#606]](https://github.com/aiidateam/aiida_core/pull/606)
+- Implemented faster query to obtain database statistics [[#738]](https://github.com/aiidateam/aiida_core/pull/738)
+- Added testing for automatic SqlAlchemy database migrations through alembic [[#834]](https://github.com/aiidateam/aiida_core/pull/834)
+
+### Critical bug fixes
+- Export will now write the link types to the archive and import will properly recreate the link [[#760]](https://github.com/aiidateam/aiida_core/pull/760)
+- Fix bug in workchain persistence that would lead to crashed workchains under certain conditions being resubmitted [[#728]](https://github.com/aiidateam/aiida_core/pull/728)
+
+### Minor bug fixes
+- Fixed bug in `TCODexporter` [[#761]](https://github.com/aiidateam/aiida_core/pull/761)
+- `verdi profile delete` now respects the configured `dbport` setting [[#713]](https://github.com/aiidateam/aiida_core/pull/713)
+- Restore correct help text for `verdi --help` [[#704]](https://github.com/aiidateam/aiida_core/pull/704)
+- Fixed query in the ICSD importer element that caused certain structures to be erroneously skipped [[#690]](https://github.com/aiidateam/aiida_core/pull/690)
+
+### Miscellaneous
+- Added a "quickstart" to plugin development in the [documentation](http://aiida-core.readthedocs.io/en/v0.10.0/developer_guide/plugins/quickstart.html), structured around the new [plugin template](https://github.com/aiidateam/aiida-plugin-template)
+- Improved and restructured the documentation
+
+
+## v0.9.1:
+
+### Critical bug fixes
+- Workchain steps will no longer be executed multiple times due to process pickles not being locked
+
+### Minor bug fixes
+- Fix arithmetic operations for basic numeric types
+- Fixed `verdi calculation cleanworkdir` after changes in `QueryBuilder` syntax
+- Fixed `verdi calculation logshow` exception when called for `WorkCalculation` nodes
+- Fixed `verdi import` for SQLAlchemy profiles
+- Fixed bug in `reentry` and update dependency requirement to `v1.0.2`
+- Made octal literal string compatible with python 3
+- Fixed broken import in the ASE plugin
+
+### Improvements
+- `verdi calculation show` now properly distinguishes between `WorkCalculation` and `JobCalculation` nodes
+- Improved error handling in `verdi setup --non-interactive`
+- Disable unnecessary console logging for tests
+
+
+## v0.9.0
+
+### Data export functionality
+- A number of new functionalities have been added to export band structures to a number of formats, including: gnuplot, matplotlib (both to export a python file, and directly PNG or PDF; both with support of LaTeX typesetting and not); JSON; improved agr (xmgrace) output. Also support for two-color bands for collinear magnetic systems. Added also possibility to specify export-format-specific parameters.
+- Added method get_export_formats() to know available export formats for a given data subclass
+- Added label prettifiers to properly typeset high-symmetry k-point labels for different formats (simple/old format, seekpath, ...) into a number of plotting codes (xmgrace, gnuplot, latex, ...)
+- Improvement of command-line export functionality (more options, possibility to write directly to file, possibility to pass custom options to exporter, by removing its DbPath dependency)
+
+### Workchains
+- Crucial bug fix: workchains can now be run through the daemon, i.e. by using `aiida.work.submit`
+- Enhancement: added an `abort` and `abort_nowait` method to `WorkChain` which allows to abort the workchain at the earliest possible moment
+- Enhancement: added the `report` method to `WorkChain`, which allows a workchain developer to log messages to the database
+- Enhancement: added command `verdi work report` which for a given `pk` returns the messages logged for a `WorkChain` through the `report` method
+- Enhancement: workchain inputs ports with a valid default specified no longer require to explicitly set `required=False` but is overriden automatically
+
+### New plugin system
+- New plugin system implemented, allowing to load aiida entrypoints, and working in parallel with old system (still experimental, though - command line entry points are not fully implemented yet)
+- Support for the plugin registry 
+
+### Code refactoring
+- Refactoring of `Node` to move as much as possible of the caching code into the abstract class
+- Refactoring of `Data` nodes to have the export code in the topmost class, and to make it more general also for formats exporting more than one file
+- Refactoring of a number of `Data` subclasses to support the new export API
+- Refactoring of `BandsData` to have export code not specific to xmgrace or a given format, and to make it more general
+
+### Documentation
+- General improvements to documentation
+- Added documentation to upgrade AiiDA from v0.8.0 to v0.9.0
+- Added documentation of new plugin system and tutorial
+- Added more in-depth documentation on how to export data nodes to various formats
+- Added explanation on how to export band structures and available formats
+- Added documentation on how to run tests in developer's guide
+- Documented Latex requirements
+- Updated WorkChain documentation for `WaitingEquationOfState` example
+- Updated AiiDA installation documentation for installing virtual environment
+- Updated documentation to use Jupyter
+
+### Enhancements
+- Speedups the travis builds process by caching pip files between runs
+- Node can be loaded by passing the start of its UUID
+- Handled invalid verdi command line arguments; added help texts for same
+- upgraded `Paramiko` to 2.1.2 and avoided to create empty file when remote connection is failed
+- `verdi calculation kill` command is now available for `SGE plugin`
+- Updated `Plum` from 0.7.8 to 0.7.9 to create a workchain inputs that had default value and evaluated to false
+- Now QueryBuilder will be imported by default for all verdi commands
+
+### Bug Fixes
+- Bug fixes in QE input parser
+- Code.get() method accepts the pk in integer or string format whereas Code.get_from_string() method accepts pk only in string format
+- `verdi code show` command now shows the description of the code
+- Bug fix to check if computer is properly configured before submitting the calculation
+
+### Miscellaneous
+- Replacing dependency from old unmantained `pyspglib` to new `spglib`
+- Accept BaseTypes as attributes/extras, and convert them automatically to their value. In this way, for instance, it is now possible to pass a `Int`, `Float`, `Str`, ... as value of a dictionary, and store all into a `ParameterData`.
+- Switch from `pkg_resources` to reentry to allow for much faster loading of modules when possible, and therefore allowing for good speed for bash completion
+- Removed obsolete code for Sqlite
+- Removed `mayavi2` package from dependencies
+
+
+## v0.8.1
+
+### Exporters
+- Upgraded the TCODExporter to produce CIF files, conforming to the newest (as of 2017-04-26) version of cif_tcod.dic.
+
+## General
+- Added dependency on six to properly re-raise exceptions
+
 ## v0.8.0
 
 ### Installation and setup
@@ -36,6 +161,7 @@ fields
 - Database efficiency improvements with orders of magnitude speedup for large databases  
 [added indices for daemon queries and node UUID queries]
 - Replace deprecated `commit_on_success` with atomic for Django transactions
+- Change of how SQLAlchemy internally uses the session and the engine to work also with forks (e.g. in celery)
 
 
 ### Workflows
@@ -48,7 +174,7 @@ fields
 - Improvements to `WorkChain`
     * Implemented a `return` statement for `WorkChain` specification
     * Logging to the database implemented through `WorkChain.report()` for debugging
-
+- Improved kill command for old-style workflows to avoid steps to remaing in running state
 
 ### Plugins
 - Added finer granularity for parsing PW timers in output
@@ -70,6 +196,7 @@ additional TCOD CIF tags, various bugfixes)
 - Fix for the direct scheduler on Mac OS X
 - Fix for the import of computers with name collisions
 - Generated backup scripts are now made profile specific and saved as `start_backup_<profile>.py`
+- Fix for the vary_rounds warning
 
 
 ## v0.7.1

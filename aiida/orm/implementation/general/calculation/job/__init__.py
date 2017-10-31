@@ -18,7 +18,7 @@ from aiida.common.datastructures import calc_states
 from aiida.common.exceptions import ModificationNotAllowed, MissingPluginError
 from aiida.common.links import LinkType
 from aiida.backends.utils import get_automatic_user
-from aiida.common.pluginloader import from_type_to_pluginclassname
+from aiida.common.old_pluginloader import from_type_to_pluginclassname
 
 # TODO: set the following as properties of the Calculation
 # 'email',
@@ -129,7 +129,7 @@ class AbstractJobCalculation(object):
             _ = self.get_parserclass()
         except MissingPluginError:
             raise ValidationError(
-                "No valid plugin found for the parser '{}'. "
+                "No valid class/implementation found for the parser '{}'. "
                 "Set the parser to None if you do not need an automatic "
                 "parser.".format(self.get_parser_name())
             )
@@ -1842,6 +1842,12 @@ class AbstractJobCalculation(object):
 
         return errfile_content
 
+    def get_desc(self):
+        """
+        Returns a string with infos retrieved from a JobCalculation node's
+        properties.
+        """
+        return self.get_state(from_attribute=True)
 
 class CalculationResultManager(object):
     """

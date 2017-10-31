@@ -27,10 +27,11 @@ from sqlalchemy.types import (
 from sqlalchemy.orm import (
     relationship,
     backref,
-    column_property,
     sessionmaker,
     foreign, mapper, aliased
 )
+
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.sql.elements import Cast
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INTEGER, array
@@ -38,7 +39,6 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB, INTEGER, array
 from sqlalchemy.sql.expression import FunctionElement, cast
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.ext.compiler import compiles
-
 
 # Aiida Django classes:
 #from aiida.orm.implementation.django.node import Node as DjangoAiidaNode
@@ -56,6 +56,8 @@ from aiida.common.exceptions import DbContentError, MissingPluginError
 # MISC
 from aiida.backends.sqlalchemy.models.utils import uuid_func
 from aiida.utils import timezone
+from aiida.common.datastructures import (calc_states, _sorted_datastates,
+                                         sort_states)
 
 Base = declarative_base()
 
@@ -79,33 +81,6 @@ class DbLink(Base):
     input = relationship("DbNode", primaryjoin="DbLink.input_id == DbNode.id")
     output = relationship("DbNode", primaryjoin="DbLink.output_id == DbNode.id")
     label = Column(String(255), index=True, nullable=False)
-
-
-class DbPath(Base):
-    __tablename__ = "db_dbpath"
-    id = Column(Integer, primary_key=True)
-    parent_id = Column(
-        Integer,
-        ForeignKey('db_dbnode.id', deferrable=True, initially="DEFERRED")
-    )
-    child_id = Column(
-        Integer,
-        ForeignKey('db_dbnode.id', deferrable=True, initially="DEFERRED")
-    )
-    parent = relationship(
-        "DbNode",
-        primaryjoin="DbPath.parent_id == DbNode.id",
-        backref="child_paths"
-    )
-    child = relationship(
-        "DbNode",
-        primaryjoin="DbPath.child_id == DbNode.id",
-        backref="parent_paths"
-    )
-    depth = Column(Integer)
-    entry_edge_id = Column(Integer)
-    direct_edge_id = Column(Integer)
-    exit_edge_id = Column(Integer)
 
 class DbCalcState(Base):
     __tablename__ = "db_dbcalcstate"
@@ -318,13 +293,6 @@ class DbNode(Base):
         passive_deletes =   True
     )
 
-    children = relationship(
-        "DbNode",
-        secondary       =   "db_dbpath",
-        primaryjoin     =   "DbNode.id == DbPath.parent_id",
-        secondaryjoin   =   "DbNode.id == DbPath.child_id",
-        backref         =   "parents"
-    )
     def get_aiida_class(self):
         """
         Return the corresponding instance of
@@ -348,85 +316,115 @@ class DbNode(Base):
         dbnode = DjangoSchemaDbNode(
                 id=self.id, type=self.type, uuid=self.uuid, ctime=self.ctime,
                 mtime=self.mtime, label=self.label,
-                dbcomputer_id=self.dbcomputer_id, user_id=self.user_id,
-                public=self.public, nodeversion=self.nodeversion
+                description=self.description, dbcomputer_id=self.dbcomputer_id,
+                user_id=self.user_id, public=self.public,
+                nodeversion=self.nodeversion
         )
         return dbnode.get_aiida_class()
 
+    @hybrid_property
+    def user_email(self):
+        """
+        Returns: the email of the user
+        """
+        return self.user.email
+
+    @user_email.expression
+    def user_email(cls):
+        """
+        Returns: the email of the user at a class level (i.e. in the database)
+        """
+        return select([DbUser.email]).where(DbUser.id == cls.user_id).label(
+            'user_email')
 
 
+    # Computer name
+    @hybrid_property
+    def computer_name(self):
+        """
+        Returns: the of the computer
+        """
+        return self.dbcomputer.name
 
-states = select(
-        [
+    @computer_name.expression
+    def computer_name(cls):
+        """
+        Returns: the name of the computer at a class level (i.e. in the 
+        database)
+        """
+        return select([DbComputer.name]).where(DbComputer.id ==
+                                                 cls.dbcomputer_id).label(
+            'computer_name')
+
+    # State
+    @hybrid_property
+    def state(self):
+        """
+        Return the most recent state from DbCalcState
+        """
+        if not self.id:
+            return None
+        all_states = DbCalcState.query.filter(DbCalcState.dbnode_id == self.id).all()
+        if all_states:
+            #return max((st.time, st.state) for st in all_states)[1]
+            return sort_states(((dbcalcstate.state, dbcalcstate.state.value)
+                                for dbcalcstate in all_states),
+                                use_key=True)[0]
+        else:
+            return None
+
+    @state.expression
+    def state(cls):
+        """
+        Return the expression to get the 'latest' state from DbCalcState,
+        to be used in queries, where 'latest' is defined using the state order
+        defined in _sorted_datastates.
+        """
+        # Sort first the latest states
+        whens = {
+            v: idx for idx, v
+            in enumerate(_sorted_datastates[::-1], start=1)}
+        custom_sort_order = case(value=DbCalcState.state,
+                                 whens=whens,
+                                 else_=100) # else: high value to put it at the bottom
+
+        # Add numerical state to string, to allow to sort them
+        states_with_num = select([
+            DbCalcState.id.label('id'),
             DbCalcState.dbnode_id.label('dbnode_id'),
-            func.max(DbCalcState.time).label('lasttime'),
-        ]
-    ).group_by(DbCalcState.dbnode_id).alias()
+            DbCalcState.state.label('state_string'),
+            custom_sort_order.label('num_state')
+        ]).select_from(DbCalcState).alias()
 
-recent_states = select([
-        DbCalcState.id.label('id'),
-        DbCalcState.dbnode_id.label('dbnode_id'),
-        DbCalcState.state.label('state'),
-        states.c.lasttime.label('time')
-    ]).\
-    select_from(
-        join(
-            DbCalcState,
-            states,
-            and_(
-                DbCalcState.dbnode_id == states.c.dbnode_id,
-                DbCalcState.time == states.c.lasttime,
-            )
-        )
-    ).alias() # .group_by(DbCalcState.dbnode_id, DbCalcState.time)
+        # Get the most 'recent' state (using the state ordering, and the min function) for
+        # each calc
+        calc_state_num = select([
+            states_with_num.c.dbnode_id.label('dbnode_id'),
+            func.min(states_with_num.c.num_state).label('recent_state')
+        ]).group_by(states_with_num.c.dbnode_id).alias()
 
-state_mapper = mapper(
-    DbCalcState,
-    recent_states,
-    primary_key= recent_states.c.dbnode_id,
-    non_primary=True,
-)
+        # Join the most-recent-state table with the DbCalcState table
+        all_states_q = select([
+            DbCalcState.dbnode_id.label('dbnode_id'),
+            DbCalcState.state.label('state_string'),
+            calc_state_num.c.recent_state.label('recent_state'),
+            custom_sort_order.label('num_state'),
+        ]).select_from(#DbCalcState).alias().join(
+            join(DbCalcState, calc_state_num, DbCalcState.dbnode_id == calc_state_num.c.dbnode_id)).alias()
 
-DbNode.state_instance = relationship(
-    state_mapper,
-    primaryjoin = recent_states.c.dbnode_id == foreign(DbNode.id),
-    viewonly=True,
-)
+        # Get the association between each calc and only its corresponding most-recent-state row
+        subq = select([
+            all_states_q.c.dbnode_id.label('dbnode_id'),
+            all_states_q.c.state_string.label('state')
+        ]).select_from(all_states_q).where(all_states_q.c.num_state == all_states_q.c.recent_state).alias()
 
-DbNode.state = column_property(
-    select([recent_states.c.state]).
-    where(recent_states.c.dbnode_id == foreign(DbNode.id))
-)
+        # Final filtering for the actual query
+        return select([subq.c.state]).\
+            where(
+                    subq.c.dbnode_id == cls.id,
+                ).\
+            label('laststate')
 
-
-
-#~ DbAttribute.value_str = column_property(
-        #~ case([
-            #~ (DbAttribute.datatype == 'txt', DbAttribute.tval),
-            #~ (DbAttribute.datatype == 'float', cast(DbAttribute.fval, String)),
-            #~ (DbAttribute.datatype == 'int', cast(DbAttribute.ival, String)),
-            #~ (DbAttribute.datatype == 'bool', cast(DbAttribute.bval, String)),
-            #~ (DbAttribute.datatype == 'date', cast(DbAttribute.dval, String)),
-            #~ (DbAttribute.datatype == 'txt', cast(DbAttribute.tval, String)),
-            #~ (DbAttribute.datatype == 'float', cast(DbAttribute.fval, String)),
-            #~ (DbAttribute.datatype == 'list', None),
-            #~ (DbAttribute.datatype == 'dict', None),
-        #~ ])
-    #~ )
-#~
-#~ DbAttribute.value_float = column_property(
-        #~ case([
-            #~ (DbAttribute.datatype == 'txt', cast(DbAttribute.tval, Float)),
-            #~ (DbAttribute.datatype == 'float', DbAttribute.fval),
-            #~ (DbAttribute.datatype == 'int', cast(DbAttribute.ival, Float)),
-            #~ (DbAttribute.datatype == 'bool', cast(DbAttribute.bval, Float)),
-            #~ (DbAttribute.datatype == 'date', cast(DbAttribute.dval, Float)),
-            #~ (DbAttribute.datatype == 'txt', cast(DbAttribute.tval, Float)),
-            #~ (DbAttribute.datatype == 'float', cast(DbAttribute.fval, Float)),
-            #~ (DbAttribute.datatype == 'list', None),
-            #~ (DbAttribute.datatype == 'dict', None),
-        #~ ])
-    #~ )
 
 
 

@@ -11,4 +11,9 @@
 
 /venv*/
 /.idea/
-/aiida.egg-info/
+*.egg-info
+.eggs
+
+# files created by coverage
+*\,cover
+coverage/

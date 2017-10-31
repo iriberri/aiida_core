@@ -19,8 +19,7 @@ from aiida.backends.settings import AIIDADB_PROFILE
 from aiida.backends.sqlalchemy.models.base import Base
 from aiida.backends.sqlalchemy.models.computer import DbComputer
 from aiida.backends.sqlalchemy.models.user import DbUser
-from aiida.backends.sqlalchemy.utils import get_session, get_engine
-from aiida.backends.sqlalchemy.utils import (install_tc)
+from aiida.backends.sqlalchemy.utils import install_tc
 from aiida.backends.testimplbase import AiidaTestImplementation
 from aiida.common.setup import get_profile_config
 from aiida.common.utils import get_configured_user_email
@@ -34,10 +33,12 @@ from aiida.orm.computer import Computer
 expire_on_commit = True
 Session = sessionmaker(expire_on_commit=expire_on_commit)
 
-# This contains the codebase for the setUpClass and tearDown methods used internally by the AiidaTestCase
-# This inherits only from 'object' to avoid that it is picked up by the automatic discovery of tests
-# (It shouldn't, as it risks to destroy the DB if there are not the checks in place, and these are
-# implemented in the AiidaTestCase
+
+# This contains the codebase for the setUpClass and tearDown methods used
+# internally by the AiidaTestCase. This inherits only from 'object' to avoid
+# that it is picked up by the automatic discovery of tests
+# (It shouldn't, as it risks to destroy the DB if there are not the checks
+# in place, and these are implemented in the AiidaTestCase
 class SqlAlchemyTests(AiidaTestImplementation):
 
     # Specify the need to drop the table at the beginning of a test case
@@ -53,21 +54,16 @@ class SqlAlchemyTests(AiidaTestImplementation):
 
     def setUpClass_method(self):
 
-        if self.test_session is None:
-            if self.connection is None:
-                config = get_profile_config(AIIDADB_PROFILE)
-                engine = get_engine(config)
-                
-                self.test_session = get_session(engine=engine)
-                self.connection = engine.connect()
+        from aiida.backends.sqlalchemy import get_scoped_session
 
-            self.test_session = Session(bind=self.connection)
-            aiida.backends.sqlalchemy.session = self.test_session
+        if self.test_session is None:
+            # Should we use reset_session?
+            self.test_session = get_scoped_session()
 
         if self.drop_all:
-            Base.metadata.drop_all(self.connection)
-            Base.metadata.create_all(self.connection)
-            install_tc(self.connection)
+            Base.metadata.drop_all(self.test_session.connection)
+            Base.metadata.create_all(self.test_session.connection)
+            install_tc(self.test_session.connection)
         else:
             self.clean_db()
 
@@ -94,7 +90,7 @@ class SqlAlchemyTests(AiidaTestImplementation):
         else:
             self.user = has_user
 
-        # Reqired by the calling class
+        # Required by the calling class
         self.user_email = self.user.email
 
         # Also self.computer is required by the calling class
@@ -189,9 +185,6 @@ class SqlAlchemyTests(AiidaTestImplementation):
 
         self.test_session.close()
         self.test_session = None
-
-        # Don't close it each time, no need
-        #self.connection.close()
 
         # I clean the test repository
         shutil.rmtree(REPOSITORY_PATH, ignore_errors=True)
