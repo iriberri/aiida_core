@@ -47,7 +47,7 @@ DBUSER = profile_conf.get('AIIDADB_USER', '')
 DBPASS = profile_conf.get('AIIDADB_PASS', '')
 DBHOST = profile_conf.get('AIIDADB_HOST', '')
 DBPORT = profile_conf.get('AIIDADB_PORT', '')
-# REPOSITORY_URI = profile_conf.get('AIIDADB_REPOSITORY_URI', '')
+REPOSITORY_URI = profile_conf.get('AIIDADB_REPOSITORY_URI', '')
 
 DATABASES = {
     'default': {

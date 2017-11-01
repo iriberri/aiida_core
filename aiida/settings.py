@@ -42,14 +42,14 @@ DBHOST = profile_conf.get('AIIDADB_HOST', '')
 DBPORT = profile_conf.get('AIIDADB_PORT', '')
 REPOSITORY_BASE_PATH = profile_conf.get('REPOSITORY_BASE_PATH', '')
 
-if not os.path.isdir(REPOSITORY_BASE_PATH):
-    try:
-        os.makedirs(REPOSITORY_BASE_PATH)
-    except OSError as error:
-        if error.errno == errno.EEXIST and os.path.isdir(REPOSITORY_BASE_PATH):
-            pass
-        else:
-            raise
+# if not os.path.isdir(REPOSITORY_BASE_PATH):
+#     try:
+#         os.makedirs(REPOSITORY_BASE_PATH)
+#     except OSError as error:
+#         if error.errno == errno.EEXIST and os.path.isdir(REPOSITORY_BASE_PATH):
+#             pass
+#         else:
+#             raise
 
 
 
@@ -91,7 +91,6 @@ def get_repository(name = ''):
     import StringIO
     import uuid as UUID
 
-    from swiftclient.client import ClientException
     from aiida.repository.implementation.filesystem.repository import RepositoryFileSystem
     from aiida.repository.implementation.swift.repository import RepositorySwift
 
@@ -143,6 +142,7 @@ def get_repository(name = ''):
         repository = RepositoryFileSystem(repo_config)
 
     elif repository_type == 'swift':
+        from swiftclient.client import ClientException
         uuid_key     = repository_config.get('uuid_key', '')
         auth_url     = repository_config.get('auth_url', '')
         auth_version = repository_config.get('auth_version', '')

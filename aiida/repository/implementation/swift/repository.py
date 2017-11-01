@@ -5,8 +5,6 @@ import StringIO
 
 from abc import ABCMeta, abstractmethod
 from aiida.repository.repository import Repository
-from swiftclient.client import Connection
-from swiftclient.client import ClientException
 
 class RepositorySwift(Repository):
     """
@@ -28,6 +26,7 @@ class RepositorySwift(Repository):
 
         :param repo_config: dictionary with configuration details for repository
         """
+        from swiftclient.client import Connection
         self.name         = repo_config['repo_name']
         self.uuid_key     = repo_config['uuid_key']
         self.auth_url     = repo_config['auth_url']
@@ -128,6 +127,8 @@ class RepositorySwift(Repository):
 
         :return boolean: returns True if the object exists and is readable, False otherwise
         """
+        from swiftclient.client import ClientException
+
         try:
             response = self.connection.head_object(self.container, key)
             is_readable = True
@@ -147,6 +148,8 @@ class RepositorySwift(Repository):
         :param source: filelike object with the content to be stored
         :param stop_if_exists:
         """
+        from swiftclient.client import ClientException
+
         self._validate_key(key)
 
         if stop_if_exists and self.exists(key):
@@ -190,6 +193,8 @@ class RepositorySwift(Repository):
         :param key: fully qualified identifier for the object within the repository
         :raise ValueError: raises exception if given key can not be resolved to readable object
         """
+        from swiftclient.client import ClientException
+
         try:
             _, content = self.connection.get_object(self.container, key)
         except ClientException as exception:
@@ -206,6 +211,8 @@ class RepositorySwift(Repository):
         :param key: fully qualified identifier for the object within the repository
         :raises: ClientException if object identified by key could not be deleted
         """
+        from swiftclient.client import ClientException
+
         try:
             self.get_object(key)
         except ValueError as exception:
@@ -223,6 +230,8 @@ class RepositorySwift(Repository):
         """
         Documentation string
         """
+        from swiftclient.client import ClientException
+
         try:
             self.connection.put_container(container)
         except ClientException as exception:
@@ -235,6 +244,8 @@ class RepositorySwift(Repository):
         """
         Documentation string
         """
+        from swiftclient.client import ClientException
+
         try:
             _, objects = self.connection.get_container(container)
         except ClientException as exception:
@@ -247,6 +258,8 @@ class RepositorySwift(Repository):
         """
         Documentation string
         """
+        from swiftclient.client import ClientException
+
         try:
             objects = self.get_container(container)
             if objects:
