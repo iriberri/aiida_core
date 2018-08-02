@@ -27,25 +27,31 @@ class Calculation(AbstractCalculation, Node):
         from django.db import IntegrityError
         from aiida.backends.djsite.db.models import DbNode
         from aiida.common.exceptions import LockError
+        from aiida.daemon.runner import add_shutdown_callback, remove_shutdown_callback
 
         # Have to employ different methods for stored and unstored nodes
         if not self.is_stored:
             if self._dbnode.public:
                 raise LockError('Cannot lock calculation<{}> as it is already locked.'.format(self.pk))
             try:
+                add_shutdown_callback(self.force_unlock)
                 self._dbnode.public = True
                 yield
             finally:
-                self._dbnode.public = False
+                self.force_unlock()
+                remove_shutdown_callback(self.force_unlock)
         else:
             # Have to go database on this m'a f'cker
             try:
                 try:
                     DbNode.objects.update_or_create(pk=self.pk, public=False, defaults={'public': True})
                     # Set the local dbnode instance lock value (this is invalidated by the above call)
+                    add_shutdown_callback(self.force_unlock)
                     self._dbnode.public = True
                     yield
                 finally:
+                    self.logger.debug('exiting lock context manager of node<{}>'.format(self.pk))
+                    remove_shutdown_callback(self.force_unlock)
                     self.force_unlock()
 
             except IntegrityError:
@@ -68,5 +74,8 @@ class Calculation(AbstractCalculation, Node):
         due to an active `lock` context manager, but rather the lock was not properly cleaned in exiting
         a previous lock context manager
         """
+        self.logger.debug('force_unlock called on node<{}>'.format(self.pk))
         self._dbnode.public = False
-        self._dbnode.save(update_fields=('public',))
+
+        if self.is_stored:
+            self._dbnode.save(update_fields=('public',))

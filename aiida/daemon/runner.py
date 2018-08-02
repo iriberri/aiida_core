@@ -16,10 +16,29 @@ from aiida.daemon.client import DaemonClient
 from aiida.work.rmq import get_rmq_config
 from aiida.work import DaemonRunner, set_runner
 
-
 logger = logging.getLogger(__name__)
 
 DAEMON_LEGACY_WORKFLOW_INTERVAL = 30
+SHUTDOWN_CALLBACKS = []
+
+
+def add_shutdown_callback(callback):
+    """
+    """
+    global SHUTDOWN_CALLBACKS
+    logger.debug('adding shutdown callback {}'.format(callback))
+    SHUTDOWN_CALLBACKS.append(callback)
+
+
+def remove_shutdown_callback(callback):
+    """
+    """
+    global SHUTDOWN_CALLBACKS
+    logger.debug('removing shutdown callback {}'.format(callback))
+    try:
+        SHUTDOWN_CALLBACKS.remove(callback)
+    except ValueError:
+        logger.error('tried to remove unregistered shutdown callback {}'.format(callback))
 
 
 def start_daemon():
@@ -32,7 +51,14 @@ def start_daemon():
     runner = DaemonRunner(rmq_config=get_rmq_config(), rmq_submit=False)
 
     def shutdown_daemon(num, frame):
+        global SHUTDOWN_CALLBACKS
+
         logger.info('Received signal to shut down the daemon runner')
+        logger.info('{} shutdown callbacks to action'.format(len(SHUTDOWN_CALLBACKS)))
+        for callback in SHUTDOWN_CALLBACKS:
+            callback()
+
+        SHUTDOWN_CALLBACKS = []
         runner.close()
 
     signal.signal(signal.SIGINT, shutdown_daemon)

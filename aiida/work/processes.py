@@ -154,7 +154,7 @@ class Process(plumpy.Process):
         else:
             self._pid = self._create_and_setup_db_record()
 
-        self.calc.logger.info('Loaded process<{}> from saved state'.format(self.calc.pk))
+        self.calc.logger.debug('Loaded process<{}> from saved state'.format(self.calc.pk))
 
     def kill(self, msg=None):
         """
