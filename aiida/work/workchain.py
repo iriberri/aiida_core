@@ -148,6 +148,7 @@ class WorkChain(Process):
         will enter in the Wait state, otherwise it will go to Continue. When the stepper returns that it is done, the
         stepper result will be converted to None and returned, unless it is an integer or instance of ExitCode.
         """
+        # pylint: disable=protected-access
         self._awaitables = []
         result = None
 
@@ -167,8 +168,11 @@ class WorkChain(Process):
                 self.to_context(**stepper_result)
 
             if self._awaitables:
+                awaitable_ids = [str(awaitable.pk) for awaitable in self._awaitables]
+                self.calc._set_process_status('Waiting for child processes: {}'.format(', '.join(awaitable_ids)))
                 return Wait(self._do_step, 'Waiting before next step')
 
+            self.calc._set_process_status(None)
             return Continue(self._do_step)
 
         return result
