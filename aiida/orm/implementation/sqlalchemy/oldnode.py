@@ -342,51 +342,7 @@ class Node(AbstractNode):
         except (KeyError, IndexError):
             raise AttributeError("Attribute '{}' does not exist".format(key))
 
-    def _set_db_extra(self, key, value, exclusive=False):
-        if exclusive:
-            raise NotImplementedError("exclusive=True not implemented yet in SQLAlchemy backend")
-
-        try:
-            self._dbnode.set_extra(key, value)
-            self._increment_version_number_db()
-        except:
-            from aiida.backends.sqlalchemy import get_scoped_session
-            session = get_scoped_session()
-            session.rollback()
-            raise
-
-    def _reset_db_extras(self, new_extras):
-        try:
-            self._dbnode.reset_extras(new_extras)
-            self._increment_version_number_db()
-        except:
-            from aiida.backends.sqlalchemy import get_scoped_session
-            session = get_scoped_session()
-            session.rollback()
-            raise
-
-    def _get_db_extra(self, key):
-        try:
-            return get_attr(self._extras(), key)
-        except (KeyError, AttributeError):
-            raise AttributeError("DbExtra {} does not exist".format(key))
-
-    def _del_db_extra(self, key):
-        try:
-            self._dbnode.del_extra(key)
-            self._increment_version_number_db()
-        except:
-            from aiida.backends.sqlalchemy import get_scoped_session
-            session = get_scoped_session()
-            session.rollback()
-            raise
-
-    def _db_iterextras(self):
-        extras = self._extras()
-        if extras is None:
-            return iter(dict().items())
-
-        return iter(extras.items())
+    
 
     def _db_iterattrs(self):
         for key, val in self._attributes().items():

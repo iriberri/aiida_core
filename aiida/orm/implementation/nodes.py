@@ -257,52 +257,198 @@ class BackendNode(backends.BackendEntity):
 
     # region Extras
 
-    @abc.abstractmethod
-    def iterextras(self):
-        """
-        Get an iterator to the extras
-
-        :return: the extras iterator
-        """
-
-    @abc.abstractmethod
     def set_extra(self, key, value, exclusive=False):
-        """
-        Set an extra on this node
+    """
+    Sets an extra of a calculation.
+    No .store() to be called. Can be used *only* after saving.
 
-        :param key: the extra key
-        :type key: str
-        :param value: the extra value
-        :param exclusive:
+    :param key: key name
+    :param value: key value
+    :param exclusive: (default=False).
+        If exclusive is True, it raises a UniquenessError if an Extra with
+        the same name already exists in the DB (useful e.g. to "lock" a
+        node and avoid to run multiple times the same computation on it).
+
+    :raise UniquenessError: if extra already exists and exclusive is True.
+    """
+        validate_attribute_key(key)
+
+        if self._to_be_stored:
+            raise ModificationNotAllowed("The extras of a node can be set only after " "storing the node")
+        self._set_db_extra(key, clean_value(value), exclusive)
+        self._increment_version_number()
+
+    
+    @abstractmethod
+    def _set_db_extra(self, key, value, exclusive):
+        """
+        Store extra directly in the DB, without checks.
+
+        DO NOT USE DIRECTLY.
+
+        :param key: key name
+        :param value: key value
+        :param exclusive: (default=False).
+            If exclusive is True, it raises a UniquenessError if an Extra with
+            the same name already exists in the DB (useful e.g. to "lock" a
+            node and avoid to run multiple times the same computation on it).
+        """
+        pass    
+    
+    def set_extras(self, the_dict):
+        """
+        Immediately sets several extras of a calculation, in the DB!
+        No .store() to be called.
+        Can be used *only* after saving.
+
+        :param the_dict: a dictionary of key:value to be set as extras
         """
 
-    @abc.abstractmethod
-    def get_extra(self, key):
-        """
-        Get an extra for the node
+        try:
+            for key, value in the_dict.items():
+                self.set_extra(key, value)
+        except AttributeError:
+            raise AttributeError("set_extras takes a dictionary as argument")
 
-        :param key: the extra key
-        :type key: str
-        :return: the extra value
-        """
+    def reset_extras(self, new_extras):
+            """
+            Deletes existing extras and creates new ones.
+            :param new_extras: dictionary with new extras
+            :return: nothing, an exceptions is raised in several circumnstances
+            """
+            if not isinstance(new_extras, dict):
+                raise TypeError("The new extras have to be a dictionary")
 
-    @abc.abstractmethod
+            if self._to_be_stored:
+                raise ModificationNotAllowed("The extras of a node can be set only after " "storing the node")
+
+            self._reset_db_extras(clean_value(new_extras))
+
+    @abstractmethod
+    def _reset_db_extras(self, new_extras):
+        """
+        Resets the extras (replacing existing ones) directly in the DB
+
+        DO NOT USE DIRECTLY!
+
+        :param new_extras: dictionary with new extras
+        """
+        pass
+
+    def get_extra(self, key, *args):
+            """
+            Get the value of a extras, reading directly from the DB!
+            Since extras can be added only after storing the node, this
+            function is meaningful to be called only after the .store() method.
+
+            :param key: key name
+            :param value: if no attribute key is found, returns value
+
+            :return: the key value
+
+            :raise ValueError: If more than two arguments are passed to get_extra
+            """
+            if len(args) > 1:
+                raise ValueError("After the key name you can pass at most one"
+                                "value, that is the default value to be used "
+                                "if no extra is found.")
+
+            try:
+                if not self.is_stored:
+                    raise AttributeError("DbExtra '{}' does not exist yet, the " "node is not stored".format(key))
+                else:
+                    return self._get_db_extra(key)
+            except AttributeError as error:
+                try:
+                    return args[0]
+                except IndexError:
+                    raise error
+    
+    @abstractmethod
+    def _get_db_extra(self, key):
+        """
+        Get an extra, directly from the DB.
+
+        DO NOT USE DIRECTLY.
+
+        :param key: key name
+        :return: the key value
+        :raise AttributeError: if the key does not exist
+        """
+        pass
+
+    def get_extras(self):
+        """
+        Get the value of extras, reading directly from the DB!
+        Since extras can be added only after storing the node, this
+        function is meaningful to be called only after the .store() method.
+
+        :return: the dictionary of extras ({} if no extras)
+        """
+        return dict(self.iterextras())
+
     def del_extra(self, key):
         """
-        Delete an extra
+        Delete a extra, acting directly on the DB!
+        The action is immediately performed on the DB.
+        Since extras can be added only after storing the node, this
+        function is meaningful to be called only after the .store() method.
 
-        :param key: the extra to delete
-        :type key: str
+        :param key: key name
+        :raise: AttributeError: if key starts with underscore
+        :raise: ModificationNotAllowed: if the node is not stored yet
         """
+        if self._to_be_stored:
+            raise ModificationNotAllowed("The extras of a node can be set and deleted " "only after storing the node")
+        self._del_db_extra(key)
+        self._increment_version_number()
 
-    @abc.abstractmethod
-    def reset_extras(self, new_extras):
-        """
-        Reset all the extras to a new dictionary
 
-        :param new_extras: the dictionary to set the extras to
-        :type new_extras: dict
+    @abstractmethod
+    def _del_db_extra(self, key):
         """
+        Delete an extra, directly on the DB.
+
+        DO NOT USE DIRECTLY.
+
+        :param key: key name
+        """
+        pass
+
+    # pylint: disable=unused-variable
+    def extras_keys(self):
+        """
+        Get the keys of the extras.
+
+        :return: a list of strings
+        """
+        for key, value in self.iterextras():
+            yield key
+
+    # pylint: disable=unreachable
+    def extras_items(self):
+        """
+        Iterator over the extras, returning tuples (key, value)
+
+        :todo: verify that I am not creating a list internally
+        """
+        if self._to_be_stored:
+            # If it is not stored yet, there are no extras that can be
+            # added (in particular, we do not even have an ID to use!)
+            # Return without value, meaning that this is an empty generator
+            return
+            yield  # Needed after return to convert it to a generator
+        for extra in self._db_extras_items():
+            yield extra
+
+    @abstractmethod
+    def _db_extras_items(self):
+        """
+        Iterator over the extras (directly in the DB!)
+
+        DO NOT USE DIRECTLY.
+        """
+        pass
 
     # endregion
 

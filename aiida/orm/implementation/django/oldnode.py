@@ -298,32 +298,6 @@ class Node(AbstractNode):
         from aiida.backends.djsite.db.models import DbAttribute
         return DbAttribute.get_value_for_node(dbnode=self._dbnode, key=key)
 
-    def _set_db_extra(self, key, value, exclusive=False):
-        from aiida.backends.djsite.db.models import DbExtra
-
-        DbExtra.set_value_for_node(self._dbnode, key, value, stop_if_existing=exclusive)
-        self._increment_version_number_db()
-
-    def _reset_db_extras(self, new_extras):
-        raise NotImplementedError("Reset of extras has not been implemented" "for Django backend.")
-
-    def _get_db_extra(self, key):
-        from aiida.backends.djsite.db.models import DbExtra
-        return DbExtra.get_value_for_node(dbnode=self._dbnode, key=key)
-
-    def _del_db_extra(self, key):
-        from aiida.backends.djsite.db.models import DbExtra
-        if not DbExtra.has_key(self._dbnode, key):
-            raise AttributeError("DbExtra {} does not exist".format(key))
-        return DbExtra.del_value_for_node(self._dbnode, key)
-        self._increment_version_number_db()
-
-    def _db_iterextras(self):
-        from aiida.backends.djsite.db.models import DbExtra
-        extraslist = DbExtra.list_all_node_elements(self._dbnode)
-        for e in extraslist:
-            yield (e.key, e.getvalue())
-
     def _db_iterattrs(self):
         from aiida.backends.djsite.db.models import DbAttribute
 

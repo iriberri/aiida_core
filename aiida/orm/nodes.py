@@ -967,21 +967,7 @@ class Node(entities.Entity):
 
         :raise UniquenessError: if extra already exists and exclusive is True.
         """
-        validate_attribute_key(key)
-
-        if not self.is_stored:
-            raise exceptions.ModificationNotAllowed("The extras of a node can be set only after " "storing the node")
-        self.backend_entity.set_extra(key, clean_value(value), exclusive)
-
-    def set_extra_exclusive(self, key, value):
-        """
-        Set an extra in exclusive mode (stops if the attribute is already there).
-        Deprecated, use set_extra() with exclusive=False
-
-        :param key: key name
-        :param value: key value
-        """
-        self.set_extra(key, value, exclusive=True)
+        self._backend_entity.set_extra(key, value, exclusive)
 
     def set_extras(self, the_dict):
         """
@@ -989,28 +975,21 @@ class Node(entities.Entity):
         No .store() to be called.
         Can be used *only* after saving.
 
-        :param the_dict: a dictionary of key:value to be set as extras
+        :param the_dict: a dictionary of key:value to be set as extras        
+        :param exclusive: (default=False).
+            If exclusive is True, it raises a UniquenessError if an Extra with
+            the same name already exists in the DB (useful e.g. to "lock" a
+            node and avoid to run multiple times the same computation on it).
         """
-
-        try:
-            for key, value in the_dict.items():
-                self.set_extra(key, value)
-        except AttributeError:
-            raise AttributeError("set_extras takes a dictionary as argument")
-
+        self._backend_entity.set_extras(the_dict)
+        
     def reset_extras(self, new_extras):
         """
         Deletes existing extras and creates new ones.
         :param new_extras: dictionary with new extras
         :return: nothing, an exceptions is raised in several circumnstances
         """
-        if not isinstance(new_extras, dict):
-            raise TypeError("The new extras have to be a dictionary")
-
-        if not self.is_stored:
-            raise exceptions.ModificationNotAllowed("The extras of a node can be set only after " "storing the node")
-
-        self.backend_entity.reset_extras(clean_value(new_extras))
+        self._backend_entity.reset_extras(new_extras)
 
     def get_extra(self, key, *args):
         """
@@ -1025,22 +1004,8 @@ class Node(entities.Entity):
 
         :raise ValueError: If more than two arguments are passed to get_extra
         """
-        if len(args) > 1:
-            raise ValueError("After the key name you can pass at most one"
-                             "value, that is the default value to be used "
-                             "if no extra is found.")
-
-        try:
-            if not self.is_stored:
-                raise AttributeError("DbExtra '{}' does not exist yet, the " "node is not stored".format(key))
-            else:
-                return self.backend_entity.get_extra(key)
-        except AttributeError:
-            try:
-                return args[0]
-            except IndexError:
-                raise
-
+        self._backend_entity.get_extra(key, *args)
+      
     def get_extras(self):
         """
         Get the value of extras, reading directly from the DB!
@@ -1049,7 +1014,7 @@ class Node(entities.Entity):
 
         :return: the dictionary of extras ({} if no extras)
         """
-        return dict(self.iterextras())
+        self._backend_entity.get_extras()
 
     def del_extra(self, key):
         """
@@ -1062,10 +1027,7 @@ class Node(entities.Entity):
         :raise: AttributeError: if key starts with underscore
         :raise: ModificationNotAllowed: if the node is not stored yet
         """
-        if not self.is_stored:
-            raise exceptions.ModificationNotAllowed("The extras of a node can be set and deleted "
-                                                    "only after storing the node")
-        self.backend_entity.del_extra(key)
+        self._backend_entity.del_extra(key)
 
     def extras(self):
         """
@@ -1073,8 +1035,7 @@ class Node(entities.Entity):
 
         :return: a list of strings
         """
-        for key, value in self.iterextras():
-            yield key
+        self._backend_entity.extras()
 
     def iterextras(self):
         """
@@ -1082,14 +1043,7 @@ class Node(entities.Entity):
 
         :todo: verify that I am not creating a list internally
         """
-        if not self.is_stored:
-            # If it is not stored yet, there are no extras that can be
-            # added (in particular, we do not even have an ID to use!)
-            # Return without value, meaning that this is an empty generator
-            return
-            yield  # Needed after return to convert it to a generator
-        for extra in self.backend_entity.iterextras():
-            yield extra
+        self._backend_entity.iterextras()
 
     # endregion
 
