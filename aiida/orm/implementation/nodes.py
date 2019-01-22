@@ -54,6 +54,9 @@ class BackendNode(backends.BackendEntity):
     def get_computer(self):
         """
         Get the computer associated to the node.
+	For a CalcJobNode, this represents the computer on which the calculation was run.
+ 	However, this can be used also for (some) data nodes, like RemoteData, to indicate
+	on which computer the data is sitting.
 
         :return: the Computer object or None.
         """
@@ -87,6 +90,77 @@ class BackendNode(backends.BackendEntity):
 
     # region Attributes
 
+    
+    @property
+    @abc.abstractmethod
+    def ctime(self):
+        """
+        Return the creation time of the node.
+        """
+    
+    @property
+    @abc.abstractmethod
+    def mtime(self):
+        """
+        Return the modification time of the node.
+        """
+    
+    @property
+    @abc.abstractmethod
+    def type(self):
+        """
+        Get the type of the node.
+
+        :return: a string.
+        """
+    
+    @property
+    @abc.abstractmethod
+    def nodeversion(self):
+        """
+        Return the version of the 
+        :return: A version integer
+        :rtype: int
+        """
+    
+    @property
+    @abc.abstractmethod
+    def label(self):
+        """
+        Get the label of the node.
+
+        :return: a string.
+        """
+    
+    @label.setter
+    @abc.abstractmethod
+    def label(self, label):
+        """
+        Set the label of the node.
+
+        :param label: a string
+        """
+    
+    @property
+    @abc.abstractmethod
+    def description(self):
+        """
+        Get the description of the node.
+
+        :return: a string
+        :rtype: str
+        """
+    
+    @description.setter
+    @abc.abstractmethod
+    def description(self, description):
+        """
+        Set the description of the node
+
+        :param desc: a string
+        """
+    
+   
     @abc.abstractmethod
     def attrs(self):
         """
@@ -94,7 +168,7 @@ class BackendNode(backends.BackendEntity):
 
         :return: a generator of the keys
         """
-
+    
     @abc.abstractmethod
     def iterattrs(self):
         """
@@ -104,6 +178,12 @@ class BackendNode(backends.BackendEntity):
         """
 
     @abc.abstractmethod
+    def get_attrs(self):
+        """
+        Return a dictionary with all attributes of this node.
+        """
+    
+    @abc.abstractmethod
     def set_attr(self, key, value):
         """
         Set an attribute on this node
@@ -111,6 +191,19 @@ class BackendNode(backends.BackendEntity):
         :param key: key name
         :type key: str
         :param value: the value
+        """
+    
+    @abc.abstractmethod
+    def append_to_attr(self, key, value, clean=True):
+        """
+        Append value to an attribute of the Node (in the DbAttribute table).
+
+        :param key: key name of "list-type" attribute If attribute doesn't exist, it is created.
+        :param value: the value to append to the list
+        :param clean: whether to clean the value
+            WARNING: when set to False, storing will throw errors
+            for any data types not recognized by the db backend
+        :raise ValidationError: if the key is not valid, e.g. it contains the separator symbol
         """
 
     @abc.abstractmethod
@@ -121,20 +214,20 @@ class BackendNode(backends.BackendEntity):
         :param key: the attribute key
         :type key: str
         """
-
+    
     @abc.abstractmethod
-    def get_attr(self, key):
+    def del_all_attrs(self):
         """
-        Get an attribute from this node
+        Delete all attributes associated to this node.
 
-        :param key: the attribute key
-        :type key: str
-        :return: the attribute value
+        :raise ModificationNotAllowed: if the Node was already stored.
         """
+
 
     # endregion
 
     # region Extras
+    
 
     @abc.abstractmethod
     def iterextras(self):
@@ -184,6 +277,7 @@ class BackendNode(backends.BackendEntity):
         """
 
     # endregion
+
 
     # region Links
 
@@ -237,6 +331,53 @@ class BackendNode(backends.BackendEntity):
 
     # endregion
 
+    @abc.abstractmethod
+    def add_comment(self, content, user=None):
+        """
+        Add a new comment.
+
+        :param content: string with comment
+        :param user: the user to associate with the comment, will use default if not supplied
+        :return: the newly created comment
+        """
+
+    @abc.abstractmethod
+    def get_comment(self, identifier):
+        """
+        Return a comment corresponding to the given identifier.
+
+        :param identifier: the comment pk
+        :raise NotExistent: if the comment with the given id does not exist
+        :raise MultipleObjectsError: if the id cannot be uniquely resolved to a comment
+        :return: the comment
+        """
+
+    @abc.abstractmethod
+    def get_comments(self):
+        """
+        Return a sorted list of comments for this node.
+
+        :return: the list of comments, sorted by pk
+        """
+
+    @abc.abstractmethod
+    def update_comment(self, identifier, content):
+        """
+        Update the content of an existing comment.
+
+        :param identifier: the comment pk
+        :param content: the new comment content
+        :raise NotExistent: if the comment with the given id does not exist
+        :raise MultipleObjectsError: if the id cannot be uniquely resolved to a comment
+        """
+
+    @abc.abstractmethod
+    def remove_comment(self, identifier):
+        """
+        Delete an existing comment.
+
+        :param identifier: the comment pk
+        """
 
 @six.add_metaclass(abc.ABCMeta)
 class BackendNodeCollection(backends.BackendCollection[BackendNode]):
@@ -245,3 +386,6 @@ class BackendNodeCollection(backends.BackendCollection[BackendNode]):
     # pylint: disable=too-few-public-methods
 
     ENTITY_CLASS = BackendNode
+
+
+
