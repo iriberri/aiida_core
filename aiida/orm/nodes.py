@@ -30,8 +30,9 @@ from aiida.common.lang import combomethod, classproperty, type_check
 from aiida.common.escaping import sql_string_match
 from aiida.manage import get_manager
 from aiida.manage.caching import get_use_cache
-from aiida.orm.utils.node import AbstractNodeMeta, clean_value, _NO_DEFAULT
+from aiida.orm.utils.node import AbstractNodeMeta
 from aiida.orm.utils.managers import NodeInputManager, NodeOutputManager
+from aiida.orm.implementation.nodes import _NO_DEFAULT
 from . import comments
 from . import convert
 from . import entities
@@ -94,6 +95,8 @@ class Node(entities.Entity):
     # are storable. This flag is checked in store()
     _storable = False
     _unstorable_message = 'only Data, WorkflowNode, CalculationNode or their subclasses can be stored'
+
+    # region VariousMethods
 
     def get_desc(self):
         """
@@ -231,23 +234,6 @@ class Node(entities.Entity):
         # Can be redefined in the subclasses
         self._init_internal_params()
 
-        self._attrs_cache = {}
-
-        # A cache of incoming links represented as a list of LinkTriples instances
-        self._incoming_cache = list()
-
-        self._temp_folder = None
-        self._repo_folder = RepositoryFolder(section=self._section_name, uuid=self.uuid)
-
-    def __del__(self):
-        """
-        Called only upon real object destruction from memory
-        I just try to remove junk, whenever possible; do not trust
-        too much this function!
-        """
-        if getattr(self, '_temp_folder', None) is not None:
-            self._temp_folder.erase()
-
     def __repr__(self):
         return '<{}: {}>'.format(self.__class__.__name__, str(self))
 
@@ -278,14 +264,6 @@ class Node(entities.Entity):
         Return the modification time of the node.
         """
         return self._backend_entity.mtime
-
-    def has_cached_links(self):
-        """
-        Return whether there are unstored incoming links in the cache.
-
-        :return: boolean, True when there are links in the incoming cache, False otherwise
-        """
-        return bool(self._incoming_cache)
 
     def _init_internal_params(self):
         """
@@ -807,18 +785,30 @@ class Node(entities.Entity):
         else:
             raise exceptions.ModificationNotAllowed("Node with uuid={} was already stored".format(self.uuid))
 
+    # endregion
+
     # region Attributes
 
     def iterattrs(self):
         """
-        Iterator over the attributes, returning tuples (key, value)
+        Iterator over the Node attributes, returning tuples (key, value)
+
+        .. deprecated:: 1.0.0b1
         """
-        if not self.is_stored:
-            for key, value in self._attrs_cache.items():
-                yield (key, value)
-        else:
-            for key, value in self.backend_entity.iterattrs():
-                yield key, value
+        warnings.warn('iterattrs has been deprecated, use attrs_items() instead', DeprecationWarning)
+
+        for item in self._backend_entity.attrs_items:
+            yield item
+
+    @property
+    def attrs_items(self):
+        """
+        Iterator over the Node attributes, returning tuples (key, value)
+
+        .. deprecated:: 1.0.0b1
+        """
+        for item in self._backend_entity.attrs_items:
+            yield item
 
     def attrs(self):
         """
@@ -826,104 +816,26 @@ class Node(entities.Entity):
 
         :return: a generator of a strings
         """
-        # Note: this calls a different function _db_attrs
-        # because often it's faster not to retrieve the values from the DB
-        if not self.is_stored:
-            for key in self._attrs_cache:
-                yield key
-        else:
-            for key in self.backend_entity.attrs():
-                yield key
+        warnings.warn('iterattrs has been deprecated, use attrs_keys() instead', DeprecationWarning)
+
+        for item in self._backend_entity.attrs_keys:
+            yield item
+
+    @property
+    def attrs_keys(self):
+        """
+        Returns the keys of the attributes as a generator.
+
+        :return: a generator of a strings
+        """
+        for item in self._backend_entity.attrs_keys:
+            yield item
 
     def get_attrs(self):
         """
         Return a dictionary with all attributes of this node.
         """
-        return dict(self.iterattrs())
-
-    def _set_attr(self, key, value, clean=True, stored_check=True):
-        """
-        Set a node attribute
-
-        :param key: key name
-        :param value: its value
-        :param clean: whether to clean values.
-            WARNING: when set to False, storing will throw errors
-            for any data types not recognized by the db backend
-        :param stored_check: when set to False will disable the mutability check
-        :raise ModificationNotAllowed: if node is already stored
-        :raise ValidationError: if the key is not valid, e.g. it contains the separator symbol
-        """
-        if stored_check and self.is_stored:
-            raise exceptions.ModificationNotAllowed('Cannot change the attributes of a stored node')
-
-        validate_attribute_key(key)
-
-        if not self.is_stored:
-            if clean:
-                value = clean_value(value)
-            self._attrs_cache[key] = value
-        else:
-            self.backend_entity.set_attr(key, clean_value(value))
-
-    def _append_to_attr(self, key, value, clean=True):
-        """
-        Append value to an attribute of the Node (in the DbAttribute table).
-
-        :param key: key name of "list-type" attribute If attribute doesn't exist, it is created.
-        :param value: the value to append to the list
-        :param clean: whether to clean the value
-            WARNING: when set to False, storing will throw errors
-            for any data types not recognized by the db backend
-        :raise ValidationError: if the key is not valid, e.g. it contains the separator symbol
-        """
-        validate_attribute_key(key)
-
-        try:
-            values = self.get_attr(key)
-        except AttributeError:
-            values = []
-
-        try:
-            if clean:
-                values.append(clean_value(value))
-            else:
-                values.append(value)
-        except AttributeError:
-            raise AttributeError("Use _set_attr only on attributes containing lists")
-
-        self._set_attr(key, values, clean=False)
-
-    def _del_attr(self, key, stored_check=True):
-        """
-        Delete an attribute.
-
-        :param key: attribute to delete.
-        :param stored_check: when set to False will disable the mutability check
-        :raise AttributeError: if key does not exist.
-        :raise ModificationNotAllowed: if node is already stored
-        """
-        if stored_check and self.is_stored:
-            raise exceptions.ModificationNotAllowed('Cannot change the attributes of a stored node')
-
-        if not self.is_stored:
-            try:
-                del self._attrs_cache[key]
-            except KeyError:
-                raise AttributeError("DbAttribute {} does not exist".format(key))
-        else:
-            self.backend_entity.del_attr(key)
-
-    def _del_all_attrs(self):
-        """
-        Delete all attributes associated to this node.
-
-        :raise ModificationNotAllowed: if the Node was already stored.
-        """
-        # I have to convert the attrs in a list, because the list will change
-        # while deleting elements
-        for attr_name in list(self.attrs()):
-            self._del_attr(attr_name)
+        return dict(self.attrs_items)
 
     def get_attr(self, key, default=_NO_DEFAULT):
         """
@@ -936,18 +848,7 @@ class Node(entities.Entity):
 
         :raise AttributeError: If no attribute is found and there is no default
         """
-        try:
-            if not self.is_stored:
-                try:
-                    return self._attrs_cache[key]
-                except KeyError:
-                    raise AttributeError("DbAttribute '{}' does not exist".format(key))
-            else:
-                return self.backend_entity.get_attr(key)
-        except AttributeError:
-            if default is _NO_DEFAULT:
-                raise
-            return default
+        return self._backend_entity.get_attr(key=key, default=default)
 
     # endregion
 
@@ -982,7 +883,7 @@ class Node(entities.Entity):
             node and avoid to run multiple times the same computation on it).
         """
         self._backend_entity.set_extras(the_dict)
-        
+
     def reset_extras(self, new_extras):
         """
         Deletes existing extras and creates new ones.
@@ -1005,7 +906,7 @@ class Node(entities.Entity):
         :raise ValueError: If more than two arguments are passed to get_extra
         """
         self._backend_entity.get_extra(key, *args)
-      
+
     def get_extras(self):
         """
         Get the value of extras, reading directly from the DB!
@@ -1660,7 +1561,7 @@ class Node(entities.Entity):
         .. deprecated:: 1.0.0b1
             Use :meth:`aiida.orm.Node.objects.query` instead.
         """
-        warnings.warn("use aidia.orm.Node.objects.query instead", DeprecationWarning)
+        warnings.warn("use aiida.orm.Node.objects.query instead", DeprecationWarning)
 
         isclass = kwargs.pop('isclass')
         query = querybuilder.QueryBuilder()

@@ -14,10 +14,16 @@ from __future__ import absolute_import
 import abc
 import six
 
+from aiida.backends.utils import validate_attribute_key
+from aiida.common import exceptions
+from aiida.orm.utils.node import clean_value
+from aiida.common.folders import RepositoryFolder, SandboxFolder
+
 from . import backends
 
-__all__ = 'BackendNode', 'BackendNodeCollection'
+__all__ = ('BackendNode', 'BackendNodeCollection', '_NO_DEFAULT')
 
+_NO_DEFAULT = tuple()
 
 @six.add_metaclass(abc.ABCMeta)
 class BackendNode(backends.BackendEntity):
@@ -56,9 +62,10 @@ class BackendNode(backends.BackendEntity):
         """
 
     @abc.abstractmethod
-    def increment_version_number(self):
+    def _increment_version_number(self):
         """
-        Increment the version number of this node by one
+        Increment the node version number of this node by one
+        directly in the database
         """
 
     @abc.abstractproperty
@@ -67,6 +74,14 @@ class BackendNode(backends.BackendEntity):
         The node UUID
 
         :return: the uuid
+        """
+
+    @abc.abstractproperty
+    def process_type(self):
+        """
+        The node process_type
+
+        :return: the process type
         """
 
     @abc.abstractmethod
@@ -180,50 +195,98 @@ class BackendNode(backends.BackendEntity):
 
     # region Attributes
 
-    def attritems(self):
+    @property
+    def attrs_items(self):
         """
         Iterator over the attributes, returning tuples (key, value)
+
+        :return: a generator of the (key, value) pairs
         """
         if not self.is_stored:
             for key, value in self._attrs_cache.items():
                 yield (key, value)
         else:
-            for key, value in self.backend_entity.iterattrs():
-                yield key, value
+            for key, value in self._get_db_attrs_items():
+                yield (key, value)
 
     @abc.abstractmethod
-    def attrs(self):
+    def _get_db_attrs_items(self):
         """
-        The attribute keys
+        Iterator over the attributes, returning tuples (key, value),
+        that actually performs the job directly on the DB.
+
+        :return: a generator of the (key, value) pairs
+        """
+
+    @property
+    def attrs_keys(self):
+        """
+        Iterator over the attributes, returning keys
+        
+        Note: It is independent of the attrs_items
+        because it is typically faster to retrieve only the keys
+        from the database, especially if the values are big.
 
         :return: a generator of the keys
         """
+        if not self.is_stored:
+            for key, value in self._attrs_cache.items():
+                yield (key, value)
+        else:
+            for key, value in self._get_db_attrs_keys():
+                yield (key, value)
 
     @abc.abstractmethod
-    def iterattrs(self):
+    def _get_db_attrs_keys(self):
         """
-        Get an iterator to all the attributes
+        Iterator over the attributes, returning the attribute keys only,
+        that actually performs the job directly on the DB.
 
-        :return: the attributes iterator
-        """
+        Note: It is independent of the _get_db_attrs_items
+        because it is typically faster to retrieve only the keys
+        from the database, especially if the values are big.    
 
-    @abc.abstractmethod
-    def get_attrs(self):
+        :return: a generator of the keys
         """
-        Return a dictionary with all attributes of this node.
-        """
-
-    @abc.abstractmethod
-    def set_attr(self, key, value):
+    
+    def set_attr(self, key, value, clean=True, stored_check=True):
         """
         Set an attribute on this node
 
         :param key: key name
         :type key: str
         :param value: the value
+        :param clean: whether to clean values.
+            WARNING: when set to False, storing will throw errors
+            for any data types not recognized by the db backend
+        :param stored_check: when set to False will disable the mutability check
+        :raise ModificationNotAllowed: if node is already stored
+        :raise ValidationError: if the key is not valid, e.g. it contains the separator symbol
         """
+        if stored_check and self.is_stored:
+            raise exceptions.ModificationNotAllowed('Cannot change the attributes of a stored node')
+
+        validate_attribute_key(key)
+
+        if not self.is_stored:
+            if clean:
+                value = clean_value(value)
+            self._attrs_cache[key] = value
+        else:
+            self._set_db_attr(key, clean_value(value))
+            self._increment_version_number()
+
 
     @abc.abstractmethod
+    def _set_db_attr(self, key, value):
+        """
+        Set the value directly in the DB, without checking if it is stored, or
+        using the cache.
+
+        :param key: key name
+        :param value: its value
+        """
+
     def append_to_attr(self, key, value, clean=True):
         """
         Append value to an attribute of the Node (in the DbAttribute table).
@@ -235,22 +298,97 @@ class BackendNode(backends.BackendEntity):
             for any data types not recognized by the db backend
         :raise ValidationError: if the key is not valid, e.g. it contains the separator symbol
         """
+        validate_attribute_key(key)
 
-    @abc.abstractmethod
-    def del_attr(self, key):
+        try:
+            values = self.get_attr(key)
+        except AttributeError:
+            values = []
+
+        try:
+            if clean:
+                values.append(clean_value(value))
+            else:
+                values.append(value)
+        except AttributeError:
+            raise AttributeError("Use _set_attr only on attributes containing lists")
+
+        self.set_attr(key, values, clean=False)
+
+
+    def del_attr(self, key, stored_check=True):
         """
         Delete an attribute from this node
 
-        :param key: the attribute key
-        :type key: str
+        :param key: attribute to delete.
+        :param stored_check: when set to False will disable the mutability check
+        :raise AttributeError: if key does not exist.
+        :raise ModificationNotAllowed: if node is already stored
         """
+        if stored_check and self.is_stored:
+            raise exceptions.ModificationNotAllowed('Cannot change the attributes of a stored node')
+
+        if not self.is_stored:
+            try:
+                del self._attrs_cache[key]
+            except KeyError:
+                raise AttributeError("DbAttribute {} does not exist".format(key))
+        else:
+            self._del_db_attr(key)
+            self._increment_version_number()
+
 
     @abc.abstractmethod
+    def _del_db_attr(self, key):
+        """
+        Delete an attribute directly from the DB
+
+        :param key: The key of the attribute to delete
+        """
+
     def del_all_attrs(self):
         """
         Delete all attributes associated to this node.
 
         :raise ModificationNotAllowed: if the Node was already stored.
+        """
+        # I have to convert the attrs in a list, because the list will change
+        # while deleting elements
+        for attr_name in list(self.attrs_keys):
+            self.del_attr(attr_name)
+
+    def get_attr(self, key, default=_NO_DEFAULT):
+        """
+        Get one attribute.
+
+        :param key: name of the attribute
+        :param default: if no attribute key is found, returns default
+
+        :return: attribute value
+
+        :raise AttributeError: If no attribute is found and there is no default
+        """
+        try:
+            if not self.is_stored:
+                try:
+                    return self._attrs_cache[key]
+                except KeyError:
+                    raise AttributeError("DbAttribute '{}' does not exist".format(key))
+            else:
+                return self._get_db_attr(key)
+        except AttributeError:
+            if default is _NO_DEFAULT:
+                raise
+            return default
+
+    @abc.abstractmethod
+    def _get_db_attr(self, key):
+        """
+        Return the attribute value, directly from the DB.
+
+        :param key: the attribute key
+        :return: the attribute value
+        :raise AttributeError: if the attribute does not exist.
         """
 
     # endregion
@@ -385,7 +523,7 @@ class BackendNode(backends.BackendEntity):
 
         :return: the dictionary of extras ({} if no extras)
         """
-        return dict(self.iterextras())
+        return dict(self.extras_items)
 
     def del_extra(self, key):
         """
@@ -415,18 +553,18 @@ class BackendNode(backends.BackendEntity):
         """
         pass
 
-    # pylint: disable=unused-variable
+    @property
     def extras_keys(self):
         """
         Get the keys of the extras.
 
         :return: a list of strings
         """
-        for key, value in self.iterextras():
+        for key, value in self.extras_items:
             yield key
 
-    # pylint: disable=unreachable
-    def extras_items(self):
+    @property
+    def extras_items(self):  
         """
         Iterator over the extras, returning tuples (key, value)
 
@@ -437,9 +575,10 @@ class BackendNode(backends.BackendEntity):
             # added (in particular, we do not even have an ID to use!)
             # Return without value, meaning that this is an empty generator
             return
-            yield  # Needed after return to convert it to a generator
+            yield  # Needed after return to convert it to a generator # pylint: disable=unreachable
         for extra in self._db_extras_items():
             yield extra
+
 
     @abstractmethod
     def _db_extras_items(self):

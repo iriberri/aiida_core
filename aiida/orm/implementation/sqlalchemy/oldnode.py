@@ -149,22 +149,6 @@ class Node(AbstractNode):
         # Type is immutable so no need to ensure the model is up to date
         return self._dbnode.type
 
-    @property
-    def ctime(self):
-        """
-        Return the creation time of the node.
-        """
-        self._ensure_model_uptodate(attribute_names=['ctime'])
-        return self._dbnode.ctime
-
-    @property
-    def mtime(self):
-        """
-        Return the modification time of the node.
-        """
-        self._ensure_model_uptodate(attribute_names=['mtime'])
-        return self._dbnode.mtime
-
     def get_user(self):
         """
         Get the user.
@@ -306,83 +290,6 @@ class Node(AbstractNode):
     def _set_db_computer(self, computer):
         type_check(computer, computers.SqlaComputer)
         self._dbnode.dbcomputer = computer.dbmodel
-
-    def _set_db_attr(self, key, value):
-        """
-        Set the value directly in the DB, without checking if it is stored, or
-        using the cache.
-
-        DO NOT USE DIRECTLY.
-
-        :param str key: key name
-        :param value: its value
-        """
-        try:
-            self._dbnode.set_attr(key, value)
-            self._increment_version_number_db()
-        except:
-            from aiida.backends.sqlalchemy import get_scoped_session
-            session = get_scoped_session()
-            session.rollback()
-            raise
-
-    def _del_db_attr(self, key):
-        try:
-            self._dbnode.del_attr(key)
-            self._increment_version_number_db()
-        except:
-            from aiida.backends.sqlalchemy import get_scoped_session
-            session = get_scoped_session()
-            session.rollback()
-            raise
-
-    def _get_db_attr(self, key):
-        try:
-            return get_attr(self._attributes(), key)
-        except (KeyError, IndexError):
-            raise AttributeError("Attribute '{}' does not exist".format(key))
-
-    
-
-    def _db_iterattrs(self):
-        for key, val in self._attributes().items():
-            yield (key, val)
-
-    def _db_attrs(self):
-        for key in self._attributes().keys():
-            yield key
-
-    def _increment_version_number_db(self):
-        self._dbnode.nodeversion = self.nodeversion + 1
-        try:
-            self._dbnode.save()
-        except:
-            from aiida.backends.sqlalchemy import get_scoped_session
-            session = get_scoped_session()
-            session.rollback()
-            raise
-
-    @property
-    def pk(self):
-        return self._dbnode.id
-
-    @property
-    def id(self):
-        return self._dbnode.id
-
-    @property
-    def process_type(self):
-        return self._dbnode.process_type
-
-    @property
-    def dbnode(self):
-        self._ensure_model_uptodate()
-        return self._dbnode
-
-    @property
-    def nodeversion(self):
-        self._ensure_model_uptodate(attribute_names=['nodeversion'])
-        return self._dbnode.nodeversion
 
     @property
     def public(self):
@@ -528,19 +435,3 @@ class Node(AbstractNode):
 
         self._dbnode.set_extra(_HASH_EXTRA_KEY, self.get_hash())
         return self
-
-    @property
-    def uuid(self):
-        return six.text_type(self._dbnode.uuid)
-
-    def _attributes(self):
-        self._ensure_model_uptodate(['attributes'])
-        return self._dbnode.attributes
-
-    def _extras(self):
-        self._ensure_model_uptodate(['extras'])
-        return self._dbnode.extras
-
-    def _ensure_model_uptodate(self, attribute_names=None):
-        if self.is_stored:
-            self._dbnode.session.expire(self._dbnode, attribute_names=attribute_names)

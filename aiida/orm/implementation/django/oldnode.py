@@ -158,17 +158,6 @@ class Node(AbstractNode):
     def type(self):
         return self._dbnode.type
 
-    @property
-    def nodeversion(self):
-        return self._dbnode.nodeversion
-
-    @property
-    def ctime(self):
-        return self._dbnode.ctime
-
-    @property
-    def mtime(self):
-        return self._dbnode.mtime
 
     def _get_db_label_field(self):
         return self._dbnode.label
@@ -271,80 +260,6 @@ class Node(AbstractNode):
     def _set_db_computer(self, computer):
         type_check(computer, computers.DjangoComputer)
         self._dbnode.dbcomputer = computer.dbmodel
-
-    def _set_db_attr(self, key, value):
-        """
-        Set the value directly in the DB, without checking if it is stored, or
-        using the cache.
-
-        DO NOT USE DIRECTLY.
-
-        :param str key: key name
-        :param value: its value
-        """
-        from aiida.backends.djsite.db.models import DbAttribute
-
-        DbAttribute.set_value_for_node(self._dbnode, key, value)
-        self._increment_version_number_db()
-
-    def _del_db_attr(self, key):
-        from aiida.backends.djsite.db.models import DbAttribute
-        if not DbAttribute.has_key(self._dbnode, key):
-            raise AttributeError("DbAttribute {} does not exist".format(key))
-        DbAttribute.del_value_for_node(self._dbnode, key)
-        self._increment_version_number_db()
-
-    def _get_db_attr(self, key):
-        from aiida.backends.djsite.db.models import DbAttribute
-        return DbAttribute.get_value_for_node(dbnode=self._dbnode, key=key)
-
-    def _db_iterattrs(self):
-        from aiida.backends.djsite.db.models import DbAttribute
-
-        all_attrs = DbAttribute.get_all_values_for_node(self._dbnode)
-        for attr in all_attrs:
-            yield (attr, all_attrs[attr])
-
-    def _db_attrs(self):
-        # Note: I "duplicate" the code from iterattrs and reimplement it
-        # here, rather than
-        # calling iterattrs from here, because iterattrs is slow on each call
-        # since it has to call .getvalue(). To improve!
-        from aiida.backends.djsite.db.models import DbAttribute
-        attrlist = DbAttribute.list_all_node_elements(self._dbnode)
-        for attr in attrlist:
-            yield attr.key
-
-    def _increment_version_number_db(self):
-        from aiida.backends.djsite.db.models import DbNode
-        # I increment the node number using a filter
-        self._dbnode.nodeversion = F('nodeversion') + 1
-        self._dbnode.save()
-
-        # This reload internally the node of self._dbnode
-        # Note: I have to reload the object (to have the right values in memory,
-        # otherwise I only get the Django Field F object as a result!
-        self._dbnode = DbNode.objects.get(pk=self._dbnode.pk)
-
-    @property
-    def uuid(self):
-        return six.text_type(self._dbnode.uuid)
-
-    @property
-    def id(self):
-        return self._dbnode.id
-
-    @property
-    def process_type(self):
-        return self._dbnode.process_type
-
-    @property
-    def dbnode(self):
-        # I also update the internal _dbnode variable, if it was saved
-        # from aiida.backends.djsite.db.models import DbNode
-        #        if self.is_stored:
-        #            self._dbnode = DbNode.objects.get(pk=self._dbnode.pk)
-        return self._dbnode
 
     def _db_store_all(self, with_transaction=True, use_cache=None):
         """

@@ -11,7 +11,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
 
+import six
+
 from aiida.backends.sqlalchemy.models import node as models
+from aiida.backends.sqlalchemy import get_scoped_session
 
 from .. import BackendNode, BackendNodeCollection
 from . import entities
@@ -38,12 +41,155 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
             ))
         self._init_backend_node()
 
+    def _increment_version_number(self):
+        """
+        Increment the node version number of this node by one
+        directly in the database
+        """
+        self._dbmodel.nodeversion = self.nodeversion + 1
+        try:
+            self._dbmodel.save()
+        except:
+            session = get_scoped_session()
+            session.rollback()
+            raise
+
+    def _ensure_model_uptodate(self, attribute_names=None):
+        """
+        Expire specific fields of the dbmodel (or, if attribute_names
+        is not specified, all of them), so they will be re-fetched
+        from the DB.
+
+        :param attribute_names: by default, expire all columns.
+             If you want to expire only specific columns, pass
+             a list of strings with the column names.
+        """
+        if self.is_stored:
+            self._dbmodel.session.expire(self._dbmodel, attribute_names=attribute_names)
+
+    def _attributes(self):
+        """
+        Return the attributes, ensuring first that the model 
+        is up to date.
+        """
+        self._ensure_model_uptodate(['attributes'])
+        return self._dbmodel.attributes
+
+    def _extras(self):
+        """
+        Return the extras, ensuring first that the model 
+        is up to date.
+        """
+        self._ensure_model_uptodate(['extras'])
+        return self._dbmodel.extras
+
+    def _get_db_attrs_items(self):
+        """
+        Iterator over the attributes, returning tuples (key, value),
+        that actually performs the job directly on the DB.
+
+        :return: a generator of the (key, value) pairs
+        """
+        for key, val in self._attributes().items():
+            yield (key, val)
+
+    def _get_db_attrs_keys(self):
+        """
+        Iterator over the attributes, returning the attribute keys only,
+        that actually performs the job directly on the DB.
+
+        Note: It is independent of the _get_db_attrs_items
+        because it is typically faster to retrieve only the keys
+        from the database, especially if the values are big.    
+
+        :return: a generator of the keys
+        """
+        for key in self._attributes().keys():
+            yield key
+
+    def _set_db_attr(self, key, value):
+        """
+        Set the value directly in the DB, without checking if it is stored, or
+        using the cache.
+
+        :param key: key name
+        :param value: its value
+        """
+        try:
+            self._dbmodel.set_attr(key, value)
+        except Exception:
+            session = get_scoped_session()
+            session.rollback()
+            raise
+
+    def _del_db_attr(self, key):
+        """
+        Delete an attribute directly from the DB
+
+        :param key: The key of the attribute to delete
+        """
+        try:
+            self._dbmodel.del_attr(key)
+        except Exception:
+            session = get_scoped_session()
+            session.rollback()
+            raise
+
+    def _get_db_attr(self, key):
+        """
+        Return the attribute value, directly from the DB.
+
+        :param key: the attribute key
+        :return: the attribute value
+        :raise AttributeError: if the attribute does not exist.
+        """
+        try:
+            return utils.get_attr(self._attributes(), key)
+        except (KeyError, IndexError):
+            raise AttributeError("Attribute '{}' does not exist".format(key))
+
     @property
     def uuid(self):
         """
         Get the UUID of the log entry
         """
-        return self._dbmodel.uuid
+        return six.text_type(self._dbmodel.uuid)
+    
+    def process_type(self):
+        """
+        The node process_type
+
+        :return: the process type
+        """
+
+    def nodeversion(self):
+        """
+        Get the version number for this node
+
+        :return: the version number
+        :rtype: int
+        """
+        self._ensure_model_uptodate(attribute_names=['nodeversion'])
+        return self._dbmodel.nodeversion
+
+    @property
+    def ctime(self):
+        """
+        Return the creation time of the node.
+        """
+        self._ensure_model_uptodate(attribute_names=['ctime'])
+        return self._dbmodel.ctime
+
+    @property
+    def mtime(self):
+        """
+        Return the modification time of the node.
+        """
+        self._ensure_model_uptodate(attribute_names=['mtime'])
+        return self._dbmodel.mtime
+
+
+
 
     def _set_db_extra(self, key, value, exclusive=False):
         """
@@ -63,8 +209,7 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
 
         try:
             self._dbmodel.set_extra(key, value)
-        except:
-            from aiida.backends.sqlalchemy import get_scoped_session
+        except Exception:
             session = get_scoped_session()
             session.rollback()
             raise
@@ -78,9 +223,8 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         :param new_extras: dictionary with new extras
         """
         try:
-            self._dbnode.reset_extras(new_extras)
-        except:
-            from aiida.backends.sqlalchemy import get_scoped_session
+            self._dbmodel.reset_extras(new_extras)
+        except Exception:
             session = get_scoped_session()
             session.rollback()
             raise
@@ -109,9 +253,8 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         :param key: key name
         """
         try:
-            self._dbnode.del_extra(key)
+            self._dbmodel.del_extra(key)
         except:
-            from aiida.backends.sqlalchemy import get_scoped_session
             session = get_scoped_session()
             session.rollback()
             raise
