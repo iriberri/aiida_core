@@ -7,7 +7,7 @@
 # For further information on the license, see the LICENSE.txt file        #
 # For further information please visit http://www.aiida.net               #
 ###########################################################################
-"""Module for Computer entities"""
+"""Module for Node entities"""
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
@@ -21,15 +21,17 @@ import six
 
 from aiida.orm.utils import links
 from aiida.backends.utils import validate_attribute_key
-from aiida.common.caching import get_use_cache
+from aiida.common.hashing import _HASH_EXTRA_KEY
 from aiida.common.links import LinkType
 from aiida.common.folders import RepositoryFolder, SandboxFolder
 from aiida.common.warnings import AiidaDeprecationWarning as DeprecationWarning  # pylint: disable=redefined-builtin
 from aiida.common import exceptions
-from aiida.common.utils import combomethod, classproperty, type_check, sql_string_match
+from aiida.common.lang import combomethod, classproperty, type_check
+from aiida.common.escaping import sql_string_match
 from aiida.manage import get_manager
-from aiida.orm.implementation.general.node import _AbstractNodeMeta, clean_value, _NO_DEFAULT, NodeOutputManager, \
-    NodeInputManager, _HASH_EXTRA_KEY
+from aiida.manage.caching import get_use_cache
+from aiida.orm.utils.node import AbstractNodeMeta, clean_value, _NO_DEFAULT
+from aiida.orm.utils.managers import NodeInputManager, NodeOutputManager
 from . import comments
 from . import convert
 from . import entities
@@ -43,7 +45,7 @@ __all__ = ('Node',)
 # pylint: disable=too-many-lines
 
 
-@six.add_metaclass(_AbstractNodeMeta)
+@six.add_metaclass(AbstractNodeMeta)
 class Node(entities.Entity):
     """
     Base class for all nodes in AiiDA.
@@ -496,7 +498,7 @@ class Node(entities.Entity):
         from aiida.orm.utils.links import validate_link
         validate_link(source, self, link_type, link_label)
 
-    def validate_outgoing(self, target, link_type, link_label):  # pylint: disable=unsed-argument
+    def validate_outgoing(self, target, link_type, link_label):  # pylint: disable=unused-argument
         """
         Validate adding a link of the given type from ourself to a given node.
 
@@ -777,9 +779,9 @@ class Node(entities.Entity):
     def get_computer(self):
         """
         Get the computer associated to the node.
-	For a CalcJobNode, this represents the computer on which the calculation was run.
- 	However, this can be used also for (some) data nodes, like RemoteData, to indicate
-	on which computer the data is sitting.
+        For a CalcJobNode, this represents the computer on which the calculation was run.
+        However, this can be used also for (some) data nodes, like RemoteData, to indicate
+        on which computer the data is sitting.
 
         :return: the Computer object or None.
         """
