@@ -240,7 +240,7 @@ class BackendNode(backends.BackendEntity):
 
 @six.add_metaclass(abc.ABCMeta)
 class BackendNodeCollection(backends.BackendCollection[BackendNode]):
-    """The collection of Computer entries."""
+    """The collection of Node entries."""
 
     # pylint: disable=too-few-public-methods
 

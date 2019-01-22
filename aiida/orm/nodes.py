@@ -91,6 +91,17 @@ class Node(entities.Entity):
     # all subclasses (WorkflowNode, CalculationNode, Data and their subclasses)
     # are storable. This flag is checked in store()
     _storable = False
+    _unstorable_message = 'only Data, WorkflowNode, CalculationNode or their subclasses can be stored'
+
+    def get_desc(self):
+        """
+        Returns a string with infos retrieved from a node's properties.
+        This method is actually overwritten by the inheriting classes
+
+        :return: a description string
+        :rtype: str
+        """
+        return ""
 
     @classmethod
     def from_backend_entity(cls, backend_entity):
@@ -104,6 +115,103 @@ class Node(entities.Entity):
     def plugin_type_string(cls):
         """Returns the plugin type string of the node class."""
         return cls._plugin_type_string
+
+    @staticmethod
+    def get_schema():
+        """
+        Every node property contains:
+            - display_name: display name of the property
+            - help text: short help text of the property
+            - is_foreign_key: is the property foreign key to other type of the node
+            - type: type of the property. e.g. str, dict, int
+
+        :return: get schema of the node
+        """
+        return {
+            "attributes": {
+                "display_name": "Attributes",
+                "help_text": "Attributes of the node",
+                "is_foreign_key": False,
+                "type": "dict"
+            },
+            "attributes.state": {
+                "display_name": "State",
+                "help_text": "AiiDA state of the calculation",
+                "is_foreign_key": False,
+                "type": ""
+            },
+            "ctime": {
+                "display_name": "Creation time",
+                "help_text": "Creation time of the node",
+                "is_foreign_key": False,
+                "type": "datetime.datetime"
+            },
+            "extras": {
+                "display_name": "Extras",
+                "help_text": "Extras of the node",
+                "is_foreign_key": False,
+                "type": "dict"
+            },
+            "id": {
+                "display_name": "Id",
+                "help_text": "Id of the object",
+                "is_foreign_key": False,
+                "type": "int"
+            },
+            "label": {
+                "display_name": "Label",
+                "help_text": "User-assigned label",
+                "is_foreign_key": False,
+                "type": "str"
+            },
+            "mtime": {
+                "display_name": "Last Modification time",
+                "help_text": "Last modification time",
+                "is_foreign_key": False,
+                "type": "datetime.datetime"
+            },
+            "type": {
+                "display_name": "Type",
+                "help_text": "Code type",
+                "is_foreign_key": False,
+                "type": "str"
+            },
+            "user_id": {
+                "display_name": "Id of creator",
+                "help_text": "Id of the user that created the node",
+                "is_foreign_key": True,
+                "related_column": "id",
+                "related_resource": "_dbusers",
+                "type": "int"
+            },
+            "uuid": {
+                "display_name": "Unique ID",
+                "help_text": "Universally Unique Identifier",
+                "is_foreign_key": False,
+                "type": "unicode"
+            },
+            "nodeversion": {
+                "display_name": "Node version",
+                "help_text": "Version of the node",
+                "is_foreign_key": False,
+                "type": "int"
+            },
+            "process_type": {
+                "display_name": "Process type",
+                "help_text": "Process type",
+                "is_foreign_key": False,
+                "type": "str"
+            }
+        }
+
+    @property
+    def logger(self):
+        """
+        Get the logger of the Node object.
+
+        :return: Logger object
+        """
+        return self._logger
 
     def __init__(self, backend=None, **kwargs):
         """
@@ -156,25 +264,6 @@ class Node(entities.Entity):
         raise exceptions.InvalidOperation('deep copying a base Node is not supported')
 
     @property
-    def logger(self):
-        """
-        Get the logger of the Node object.
-
-        :return: Logger object
-        """
-        return self._logger
-
-    def get_desc(self):
-        """
-        Returns a string with infos retrieved from a node's properties.
-        This method is actually overwritten by the inheriting classes
-
-        :return: a description string
-        :rtype: str
-        """
-        return ''
-
-    @property
     def ctime(self):
         """
         Return the creation time of the node.
@@ -214,6 +303,17 @@ class Node(entities.Entity):
         this is set.
         """
         return {}
+
+    @classmethod
+    def query(cls, *_args, **_kwargs):
+        """
+        Query for nodes of this type
+
+        .. deprecated:: 1.0.0b1
+            Use :meth:`aiida.orm.Node.objects.query` instead.
+        """
+        warnings.warn("use aidia.orm.Node.objects.query instead", DeprecationWarning)
+        raise NotImplementedError("This method is no longer available, use Node.objects.query()")
 
     def _set_with_defaults(self, **kwargs):
         """
@@ -312,7 +412,7 @@ class Node(entities.Entity):
 
         :return: a string.
         """
-        return self._get_db_label_field()
+        return self._backend_entity.label
 
     @label.setter
     def label(self, label):
@@ -321,21 +421,7 @@ class Node(entities.Entity):
 
         :param label: a string
         """
-        self._update_db_label_field(label)
-
-    def _get_db_label_field(self):
-        """
-        Get the label field acting directly on the DB
-
-        :return: a string.
-        """
-        return self._backend_entity.get_db_label_field()
-
-    def _update_db_label_field(self, field_value):
-        """
-        Set the label field acting directly on the DB
-        """
-        self._backend_entity.set_db_label_field(field_value)
+        self._backend_entity.label = label
 
     @property
     def description(self):
@@ -345,28 +431,16 @@ class Node(entities.Entity):
         :return: a string
         :rtype: str
         """
-        return self._get_db_description_field()
+        return self._backend_entity.description
 
     @description.setter
-    def description(self, desc):
+    def description(self, description):
         """
         Set the description of the node
 
         :param desc: a string
         """
-        self._update_db_description_field(desc)
-
-    def _get_db_description_field(self):
-        """
-        Get the description of this node, acting directly at the DB level
-        """
-        return self._backend_entity.get_db_description_field()
-
-    def _update_db_description_field(self, field_value):
-        """
-        Update the description of this node, acting directly at the DB level
-        """
-        self._backend_entity.update_db_description_field(field_value)
+        self._backend_entity.description = description
 
     def _validate(self):
         """
@@ -572,102 +646,6 @@ class Node(entities.Entity):
 
         return [links.LinkTriple(entry[0], LinkType(entry[1]), entry[2]) for entry in builder.all()]
 
-    def _replace_link_from(self, source, link_type, link_label):
-        """
-        Replace an incoming link with the given type andlabel, or create it if it does not exist.
-
-        :note: In subclasses, change only this. Moreover, remember to call
-           the super() method in order to properly use the caching logic!
-
-        :param source: the node from which the link is coming
-        :param link_type: the link type
-        :param link_label: the link label
-        """
-        self.validate_incoming(source, link_type, link_label)
-        source.validate_outgoing(self, link_type, link_label)
-
-        link_triple = links.LinkTriple(source, link_type, link_label)
-
-        # If both are stored, write directly on the DB
-        if self.is_stored and source.is_stored:
-            self._replace_dblink_from(source, link_type, link_label)
-
-            # If the link triple was in the local cache, remove it, which can happen if one first stores the target
-            # node, followed by the source node.
-            try:
-                self._incoming_cache.remove(link_triple)
-            except ValueError:
-                pass
-        else:
-            # At least one node is not stored yet so add it to the internal cache
-            # I insert the link directly in the cache rather than calling _add_cachelink_from
-            # because this latter performs an undesired check
-            self._incoming_cache.append(link_triple)
-
-    def _remove_link_from(self, label):
-        """
-        Remove from the DB the input link with the given label.
-
-        :note: In subclasses, change only this. Moreover, remember to call
-            the super() method in order to properly use the caching logic!
-
-        :note: No error is raised if the link does not exist.
-
-        :param str label: the name of the label to set the link from src.
-        :param link_type: the link type, must be one of the enum values form
-          :class:`~aiida.common.links.LinkType`
-        """
-        if self.is_stored:
-            self.backend_entity.remove_link_from(label)
-        else:
-            try:
-                del self._incoming_cache[label]
-            except KeyError:
-                pass
-
-    def _replace_dblink_from(self, src, link_type, label):
-        """
-        Replace an input link with the given label and type, or simply creates
-        it if it does not exist.
-
-        :note: this function should not be called directly; it acts directly on
-            the database.
-
-        :param str src: the source object.
-        :param str label: the label of the link from src to the current Node
-        :param link_type: the link type, must be one of the enum values form
-          :class:`~aiida.common.links.LinkType`
-        """
-        self.backend_entity.replace_dblink_from(src, link_type, label)
-
-    def _remove_dblink_from(self, label):
-        """
-        Remove from the DB the input link with the given label.
-
-        :note: this function should not be called directly; it acts directly on
-            the database.
-
-        :note: No checks are done to verify that the link actually exists.
-
-        :param str label: the label of the link from src to the current Node
-        :param link_type: the link type, must be one of the enum values form
-          :class:`~aiida.common.links.LinkType`
-        """
-        self.backend_entity.remove_dblink_from(label)
-
-    def _add_dblink_from(self, src, link_type, label):
-        """
-        Add a link to the current node from the 'src' node.
-        Both nodes must be a Node instance (or a subclass of Node)
-
-        :note: this function should not be called directly; it acts directly on
-            the database.
-
-        :param src: the source object
-        :param str label: the name of the label to set the link from src.
-        """
-        self.backend_entity.add_dblink_from(src, link_type, label)
-
     def get_inputs_dict(self, only_in_db=False, link_type=None):
         """
         Return a dictionary where the key is the label of the input link, and
@@ -740,7 +718,7 @@ class Node(entities.Entity):
         if link_type is not None and not isinstance(link_type, LinkType):
             raise TypeError('link_type should be a LinkType object')
 
-        inputs_list = self._get_db_input_links(link_type=link_type)
+        inputs_list = self._backend_entity._get_db_input_links(link_type=link_type)
 
         if not only_in_db:
             # Needed for the check
@@ -764,16 +742,6 @@ class Node(entities.Entity):
             return list(filtered_list)
 
         return [i[1] for i in filtered_list]
-
-    def _get_db_input_links(self, link_type):
-        """
-        Return a list of tuples (label, aiida_class) for each input link,
-        possibly filtering only by those of a given type.
-
-        :param link_type: if not None, a link type to filter results
-        :return:  a list of tuples (label, aiida_class)
-        """
-        return self.backend_entity.get_db_input_links(link_type)
 
     def get_outputs(self, node_type=None, also_labels=False, link_type=None):
         """
@@ -809,8 +777,9 @@ class Node(entities.Entity):
     def get_computer(self):
         """
         Get the computer associated to the node.
-
-        TODO: Move this to calculation
+	For a CalcJobNode, this represents the computer on which the calculation was run.
+ 	However, this can be used also for (some) data nodes, like RemoteData, to indicate
+	on which computer the data is sitting.
 
         :return: the Computer object or None.
         """
@@ -823,10 +792,6 @@ class Node(entities.Entity):
     def set_computer(self, computer):
         """
         Set the computer to be used by the node.
-
-        Note that the computer makes sense only for some nodes: Calculation, RemoteData, ...
-
-        TODO: Move this to Calculation
 
         :param computer: the computer object
         :type computer: :class:`aiida.orm.Computer`
@@ -1416,8 +1381,8 @@ class Node(entities.Entity):
 
         # As a first thing, I check if the data is storable
         if not self._storable:
-            raise exceptions.StoringNotAllowed("You are not allowed to store a base Node or ProcessNode, you can "
-                                               "only store Data, WorkflowNode, CalculationNode or their subclasses")
+            raise exceptions.StoringNotAllowed(self._unstorable_message)
+
         # Second thing: check if it's valid
         self._validate()
 
@@ -1671,152 +1636,52 @@ class Node(entities.Entity):
 
         return process_class
 
-    @staticmethod
-    def get_schema():
-        """
-        Every node property contains:
-            - display_name: display name of the property
-            - help text: short help text of the property
-            - is_foreign_key: is the property foreign key to other type of the node
-            - type: type of the property. e.g. str, dict, int
 
-        :return: get schema of the node
-        """
-        return {
-            "attributes": {
-                "display_name": "Attributes",
-                "help_text": "Attributes of the node",
-                "is_foreign_key": False,
-                "type": "dict"
-            },
-            "attributes.state": {
-                "display_name": "State",
-                "help_text": "AiiDA state of the calculation",
-                "is_foreign_key": False,
-                "type": ""
-            },
-            "ctime": {
-                "display_name": "Creation time",
-                "help_text": "Creation time of the node",
-                "is_foreign_key": False,
-                "type": "datetime.datetime"
-            },
-            "extras": {
-                "display_name": "Extras",
-                "help_text": "Extras of the node",
-                "is_foreign_key": False,
-                "type": "dict"
-            },
-            "id": {
-                "display_name": "Id",
-                "help_text": "Id of the object",
-                "is_foreign_key": False,
-                "type": "int"
-            },
-            "label": {
-                "display_name": "Label",
-                "help_text": "User-assigned label",
-                "is_foreign_key": False,
-                "type": "str"
-            },
-            "mtime": {
-                "display_name": "Last Modification time",
-                "help_text": "Last modification time",
-                "is_foreign_key": False,
-                "type": "datetime.datetime"
-            },
-            "type": {
-                "display_name": "Type",
-                "help_text": "Code type",
-                "is_foreign_key": False,
-                "type": "str"
-            },
-            "user_id": {
-                "display_name": "Id of creator",
-                "help_text": "Id of the user that created the node",
-                "is_foreign_key": True,
-                "related_column": "id",
-                "related_resource": "_dbusers",
-                "type": "int"
-            },
-            "uuid": {
-                "display_name": "Unique ID",
-                "help_text": "Universally Unique Identifier",
-                "is_foreign_key": False,
-                "type": "unicode"
-            },
-            "nodeversion": {
-                "display_name": "Node version",
-                "help_text": "Version of the node",
-                "is_foreign_key": False,
-                "type": "int"
-            },
-            "process_type": {
-                "display_name": "Process type",
-                "help_text": "Process type",
-                "is_foreign_key": False,
-                "type": "str"
-            }
-        }
+#    @classmethod
+#    def get_subclass_from_uuid(cls, uuid):
+#        """
+#        Get a node object from the uuid, with the proper subclass of Node.
+#        (if Node(uuid=...) is called, only the Node class is loaded).
+#
+#        :param uuid: a string with the uuid of the object to be loaded.
+#        :return: the object of the proper subclass.
+#        :raise: NotExistent: if there is no entry of the desired
+#                             object kind with the given uuid.
+#
+#        .. deprecated:: 1.0.0b1
+#            Use :meth:`aiida.orm.Node.objects.get` instead.
+#        """
+#        warnings.warn("use aidia.orm.Node.objects.get instead", DeprecationWarning)
+#        return cls.objects.get(uuid=uuid)
+#
+#    @classmethod
+#    def get_subclass_from_pk(cls, pk):
+#        """
+#        Get a node object from the pk, with the proper subclass of Node.
+#        (integer primary key used in this database),
+#        but loading the proper subclass where appropriate.
+#
+#        :param pk: a string with the pk of the object to be loaded.
+#        :return: the object of the proper subclass.
+#        :raise: NotExistent: if there is no entry of the desired
+#                             object kind with the given pk.
+#
+#        .. deprecated:: 1.0.0b1
+#            Use :meth:`aiida.orm.Node.objects.get` instead.
+#        """
+#        warnings.warn("use aidia.orm.Node.objects.get instead", DeprecationWarning)
+#        return cls.objects.get(id=pk)
 
-    # region Deprecated
-
-    @classmethod
-    def get_subclass_from_uuid(cls, uuid):
-        """
-        Get a node object from the uuid, with the proper subclass of Node.
-        (if Node(uuid=...) is called, only the Node class is loaded).
-
-        :param uuid: a string with the uuid of the object to be loaded.
-        :return: the object of the proper subclass.
-        :raise: NotExistent: if there is no entry of the desired
-                             object kind with the given uuid.
-
-        .. deprecated:: 1.0.0b1
-            Use :meth:`aiida.orm.Node.objects.get` instead.
-        """
-        warnings.warn("use aidia.orm.Node.objects.get instead", DeprecationWarning)
-        return cls.objects.get(uuid=uuid)
-
-    @classmethod
-    def get_subclass_from_pk(cls, pk):
-        """
-        Get a node object from the pk, with the proper subclass of Node.
-        (integer primary key used in this database),
-        but loading the proper subclass where appropriate.
-
-        :param pk: a string with the pk of the object to be loaded.
-        :return: the object of the proper subclass.
-        :raise: NotExistent: if there is no entry of the desired
-                             object kind with the given pk.
-
-        .. deprecated:: 1.0.0b1
-            Use :meth:`aiida.orm.Node.objects.get` instead.
-        """
-        warnings.warn("use aidia.orm.Node.objects.get instead", DeprecationWarning)
-        return cls.objects.get(id=pk)
-
-    def __int__(self):
-        """
-        .. deprecated:: 1.0.0b1
-            It will no longer be possible to get the ID this way, it's a dangerous method to have that
-            was only there for legacy query reasons
-        """
-        if not self.is_stored:
-            return None
-
-        return self.id
-
-    @classmethod
-    def query(cls, *_args, **_kwargs):
-        """
-        Query for nodes of this type
-
-        .. deprecated:: 1.0.0b1
-            Use :meth:`aiida.orm.Node.objects.query` instead.
-        """
-        warnings.warn("use aidia.orm.Node.objects.query instead", DeprecationWarning)
-        raise NotImplementedError("This method is no longer available, use Node.objects.query()")
+#    def __int__(self):
+#        """
+#        .. deprecated:: 1.0.0b1
+#            It will no longer be possible to get the ID this way, it's a dangerous method to have that
+#            was only there for legacy query reasons
+#        """
+#        if not self.is_stored:
+#            return None
+#
+#        return self.id
 
     @combomethod
     def querybuild(self_or_cls, **kwargs):  # pylint: disable=no-self-argument
