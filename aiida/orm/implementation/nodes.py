@@ -27,6 +27,25 @@ class BackendNode(backends.BackendEntity):
 
     # pylint: disable=too-many-public-methods
 
+    def _init_backend_node(self):
+        """
+        Initialize internal variables for the backend node
+        
+        This needs to be called explicitly in each specific
+        subclass implementation of the init.
+        """
+        self._attrs_cache = {}
+
+        # A cache of incoming links represented as a list of LinkTriples instances
+        self._incoming_cache = list()
+
+        self._temp_folder = None
+        self._repo_folder = RepositoryFolder(section=self._section_name, uuid=self.uuid)
+
+        # TODO: decide what to do with _init_internal_params
+
+    # region db_columns
+
     @abc.abstractproperty
     def nodeversion(self):
         """
@@ -88,23 +107,20 @@ class BackendNode(backends.BackendEntity):
         :type user: :class:`aiida.orm.implementation.User`
         """
 
-    # region Attributes
-
-    
     @property
     @abc.abstractmethod
     def ctime(self):
         """
         Return the creation time of the node.
         """
-    
+
     @property
     @abc.abstractmethod
     def mtime(self):
         """
         Return the modification time of the node.
         """
-    
+
     @property
     @abc.abstractmethod
     def type(self):
@@ -113,7 +129,7 @@ class BackendNode(backends.BackendEntity):
 
         :return: a string.
         """
-    
+
     @property
     @abc.abstractmethod
     def nodeversion(self):
@@ -122,7 +138,7 @@ class BackendNode(backends.BackendEntity):
         :return: A version integer
         :rtype: int
         """
-    
+
     @property
     @abc.abstractmethod
     def label(self):
@@ -131,7 +147,7 @@ class BackendNode(backends.BackendEntity):
 
         :return: a string.
         """
-    
+
     @label.setter
     @abc.abstractmethod
     def label(self, label):
@@ -140,7 +156,7 @@ class BackendNode(backends.BackendEntity):
 
         :param label: a string
         """
-    
+
     @property
     @abc.abstractmethod
     def description(self):
@@ -150,7 +166,7 @@ class BackendNode(backends.BackendEntity):
         :return: a string
         :rtype: str
         """
-    
+
     @description.setter
     @abc.abstractmethod
     def description(self, description):
@@ -159,8 +175,22 @@ class BackendNode(backends.BackendEntity):
 
         :param desc: a string
         """
-    
-   
+
+    # endregion
+
+    # region Attributes
+
+    def attritems(self):
+        """
+        Iterator over the attributes, returning tuples (key, value)
+        """
+        if not self.is_stored:
+            for key, value in self._attrs_cache.items():
+                yield (key, value)
+        else:
+            for key, value in self.backend_entity.iterattrs():
+                yield key, value
+
     @abc.abstractmethod
     def attrs(self):
         """
@@ -168,7 +198,7 @@ class BackendNode(backends.BackendEntity):
 
         :return: a generator of the keys
         """
-    
+
     @abc.abstractmethod
     def iterattrs(self):
         """
@@ -182,7 +212,7 @@ class BackendNode(backends.BackendEntity):
         """
         Return a dictionary with all attributes of this node.
         """
-    
+
     @abc.abstractmethod
     def set_attr(self, key, value):
         """
@@ -192,7 +222,7 @@ class BackendNode(backends.BackendEntity):
         :type key: str
         :param value: the value
         """
-    
+
     @abc.abstractmethod
     def append_to_attr(self, key, value, clean=True):
         """
@@ -214,7 +244,7 @@ class BackendNode(backends.BackendEntity):
         :param key: the attribute key
         :type key: str
         """
-    
+
     @abc.abstractmethod
     def del_all_attrs(self):
         """
@@ -223,11 +253,9 @@ class BackendNode(backends.BackendEntity):
         :raise ModificationNotAllowed: if the Node was already stored.
         """
 
-
     # endregion
 
     # region Extras
-    
 
     @abc.abstractmethod
     def iterextras(self):
@@ -278,8 +306,15 @@ class BackendNode(backends.BackendEntity):
 
     # endregion
 
-
     # region Links
+
+    def has_cached_links(self):
+        """
+        Return whether there are unstored incoming links in the cache.
+
+        :return: boolean, True when there are links in the incoming cache, False otherwise
+        """
+        return bool(self._incoming_cache)
 
     @abc.abstractmethod
     def get_input_links(self, link_type):
@@ -331,6 +366,8 @@ class BackendNode(backends.BackendEntity):
 
     # endregion
 
+    # region Comments
+
     @abc.abstractmethod
     def add_comment(self, content, user=None):
         """
@@ -379,6 +416,22 @@ class BackendNode(backends.BackendEntity):
         :param identifier: the comment pk
         """
 
+    # endregion
+
+    # region PythonMethods
+
+    def __del__(self):
+        """
+        Called only upon real object destruction from memory
+        I just try to remove junk, whenever possible; do not trust
+        too much this function!
+        """
+        if getattr(self, '_temp_folder', None) is not None:
+            self._temp_folder.erase()
+
+    # endregion
+
+
 @six.add_metaclass(abc.ABCMeta)
 class BackendNodeCollection(backends.BackendCollection[BackendNode]):
     """The collection of Node entries."""
@@ -386,6 +439,3 @@ class BackendNodeCollection(backends.BackendCollection[BackendNode]):
     # pylint: disable=too-few-public-methods
 
     ENTITY_CLASS = BackendNode
-
-
-

@@ -10,3 +10,40 @@
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
+
+from aiida.backends.djsite.db import models
+
+from .. import BackendNode, BackendNodeCollection
+from . import entities
+
+
+class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
+    """Django Node backend entity"""
+
+    MODEL_CLASS = models.DbNode
+
+    # TODO: check how many parameters we want to expose in the init
+    # and if we need to define here some defaults
+    def __init__(self, backend, type, process_type, label, description):
+        # pylint: disable=too-many-arguments
+        super(DjangoNode, self).__init__(backend)
+        self._dbmodel = models.DbNode(
+            type=type,
+            process_type=process_type,
+            label=label,
+            description=description,
+        )
+        self._init_backend_node()
+
+    @property
+    def uuid(self):
+        """
+        Get the UUID of the log entry
+        """
+        return self._dbmodel.uuid
+
+
+class DjangoNodeCollection(BackendNodeCollection):
+    """The Django collection for nodes"""
+
+    ENTITY_CLASS = DjangoNode
