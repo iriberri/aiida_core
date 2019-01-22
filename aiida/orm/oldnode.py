@@ -387,11 +387,9 @@ class AbstractNode(object):
                 if len(incomp) == 1:
                     raise ValueError("Cannot set {} directly when creating "
                                      "the node or using the .set() method; "
-                                     "use the specific method instead.".format(
-                        incomp[0]))
+                                     "use the specific method instead.".format(incomp[0]))
                 else:
-                    raise ValueError("Cannot set {} at the same time".format(
-                        " and ".join(incomp)))
+                    raise ValueError("Cannot set {} at the same time".format(" and ".join(incomp)))
 
         for k, v in arguments.items():
             try:
@@ -400,11 +398,9 @@ class AbstractNode(object):
                 else:
                     method = getattr(self, 'set_{}'.format(k))
             except AttributeError:
-                raise ValueError("Unable to set '{0}', no set_{0} method "
-                                 "found".format(k))
+                raise ValueError("Unable to set '{0}', no set_{0} method " "found".format(k))
             if not isinstance(method, Callable):
-                raise ValueError("Unable to set '{0}', set_{0} is not "
-                                 "callable!".format(k))
+                raise ValueError("Unable to set '{0}', set_{0} is not " "callable!".format(k))
             method(v)
 
     @abstractproperty
@@ -690,11 +686,19 @@ class AbstractNode(object):
         builder.append(Node, filters=node_filters, tag='main')
 
         if link_direction == 'outgoing':
-            builder.append(node_class, with_incoming='main', project=['*'],
-                           edge_project=['type', 'label'], edge_filters=edge_filters)
+            builder.append(
+                node_class,
+                with_incoming='main',
+                project=['*'],
+                edge_project=['type', 'label'],
+                edge_filters=edge_filters)
         else:
-            builder.append(node_class, with_outgoing='main', project=['*'],
-                           edge_project=['type', 'label'], edge_filters=edge_filters)
+            builder.append(
+                node_class,
+                with_outgoing='main',
+                project=['*'],
+                edge_project=['type', 'label'],
+                edge_filters=edge_filters)
 
         return [links.LinkTriple(entry[0], LinkType(entry[1]), entry[2]) for entry in builder.all()]
 
@@ -726,9 +730,7 @@ class AbstractNode(object):
             AiidaDeprecationWarning as DeprecationWarning  # pylint: disable=redefined-builtin
         warnings.warn('get_inputs_dict method is deprecated, use get_incoming instead', DeprecationWarning)
 
-        return dict(
-            self.get_inputs(
-                also_labels=True, only_in_db=only_in_db, link_type=link_type))
+        return dict(self.get_inputs(also_labels=True, only_in_db=only_in_db, link_type=link_type))
 
     def get_outputs_dict(self, link_type=None):
         """
@@ -757,9 +759,7 @@ class AbstractNode(object):
         new_outputs = {}
         # first add the defaults
         for irreducible_linkname in linknames_set:
-            this_elements = [
-                i[1] for i in all_outputs if i[0] == irreducible_linkname
-            ]
+            this_elements = [i[1] for i in all_outputs if i[0] == irreducible_linkname]
             # select the oldest element
             last_element = sorted(this_elements, key=lambda x: x.ctime)[0]
             # for this one add the default value
@@ -899,8 +899,7 @@ class AbstractNode(object):
                 computer = computer.backend_entity
             self._set_db_computer(computer)
         else:
-            raise ModificationNotAllowed(
-                "Node with uuid={} was already stored".format(self.uuid))
+            raise ModificationNotAllowed("Node with uuid={} was already stored".format(self.uuid))
 
     @abstractmethod
     def _set_db_computer(self, computer):
@@ -964,8 +963,7 @@ class AbstractNode(object):
             else:
                 values.append(value)
         except AttributeError:
-            raise AttributeError(
-                "Use _set_attr only on attributes containing lists")
+            raise AttributeError("Use _set_attr only on attributes containing lists")
 
         self._set_attr(key, values, clean=False)
 
@@ -998,8 +996,7 @@ class AbstractNode(object):
             try:
                 del self._attrs_cache[key]
             except KeyError:
-                raise AttributeError(
-                    "DbAttribute {} does not exist".format(key))
+                raise AttributeError("DbAttribute {} does not exist".format(key))
         else:
             self._del_db_attr(key)
 
@@ -1041,8 +1038,7 @@ class AbstractNode(object):
                 try:
                     return self._attrs_cache[key]
                 except KeyError:
-                    raise AttributeError(
-                        "DbAttribute '{}' does not exist".format(key))
+                    raise AttributeError("DbAttribute '{}' does not exist".format(key))
             else:
                 return self._get_db_attr(key)
         except AttributeError:
@@ -1080,9 +1076,7 @@ class AbstractNode(object):
         validate_attribute_key(key)
 
         if self._to_be_stored:
-            raise ModificationNotAllowed(
-                "The extras of a node can be set only after "
-                "storing the node")
+            raise ModificationNotAllowed("The extras of a node can be set only after " "storing the node")
         self._set_db_extra(key, clean_value(value), exclusive)
 
     def set_extra_exclusive(self, key, value):
@@ -1137,9 +1131,7 @@ class AbstractNode(object):
             raise TypeError("The new extras have to be a dictionary")
 
         if self._to_be_stored:
-            raise ModificationNotAllowed(
-                "The extras of a node can be set only after "
-                "storing the node")
+            raise ModificationNotAllowed("The extras of a node can be set only after " "storing the node")
 
         self._reset_db_extras(clean_value(new_extras))
 
@@ -1174,8 +1166,7 @@ class AbstractNode(object):
 
         try:
             if not self.is_stored:
-                raise AttributeError("DbExtra '{}' does not exist yet, the "
-                                     "node is not stored".format(key))
+                raise AttributeError("DbExtra '{}' does not exist yet, the " "node is not stored".format(key))
             else:
                 return self._get_db_extra(key)
         except AttributeError as e:
@@ -1219,9 +1210,7 @@ class AbstractNode(object):
         :raise: ModificationNotAllowed: if the node is not stored yet
         """
         if self._to_be_stored:
-            raise ModificationNotAllowed(
-                "The extras of a node can be set and deleted "
-                "only after storing the node")
+            raise ModificationNotAllowed("The extras of a node can be set and deleted " "only after storing the node")
         self._del_db_extra(key)
 
     @abstractmethod
@@ -1356,8 +1345,7 @@ class AbstractNode(object):
         :return: the list of comments, sorted by pk
         """
         from aiida.orm.comments import Comment
-        return Comment.objects.find(filters={'dbnode_id': self.pk},
-                                    order_by=[{'id': 'asc'}])
+        return Comment.objects.find(filters={'dbnode_id': self.pk}, order_by=[{'id': 'asc'}])
 
     def update_comment(self, identifier, content):
         """
@@ -1455,8 +1443,7 @@ class AbstractNode(object):
 
         :return: a Folder object.
         """
-        return self.folder.get_subfolder(
-            self._path_subfolder_name, reset_limit=True)
+        return self.folder.get_subfolder(self._path_subfolder_name, reset_limit=True)
 
     def get_folder_list(self, subfolder='.'):
         """
@@ -1465,8 +1452,7 @@ class AbstractNode(object):
         :param subfolder: get the list of a subfolder
         :return: a list of strings.
         """
-        return self._get_folder_pathsubfolder.get_subfolder(
-            subfolder).get_content_list()
+        return self._get_folder_pathsubfolder.get_subfolder(subfolder).get_content_list()
 
     def _get_temp_folder(self):
         """
@@ -1489,12 +1475,10 @@ class AbstractNode(object):
         :param str path: relative path to file/directory.
         """
         if self.is_stored:
-            raise ModificationNotAllowed(
-                "Cannot delete a path after storing the node")
+            raise ModificationNotAllowed("Cannot delete a path after storing the node")
 
         if os.path.isabs(path):
-            raise ValueError("The destination path in remove_path "
-                             "must be a relative path")
+            raise ValueError("The destination path in remove_path " "must be a relative path")
         self._get_folder_pathsubfolder.remove_path(path)
 
     def add_path(self, src_abs, dst_path):
@@ -1512,14 +1496,12 @@ class AbstractNode(object):
             separate subfolders, remember to reset the limit.
         """
         if self.is_stored:
-            raise ModificationNotAllowed(
-                "Cannot insert a path after storing the node")
+            raise ModificationNotAllowed("Cannot insert a path after storing the node")
 
         if not os.path.isabs(src_abs):
             raise ValueError("The source path in add_path must be absolute")
         if os.path.isabs(dst_path):
-            raise ValueError("The destination path in add_path must be a"
-                             "filename without any subfolder")
+            raise ValueError("The destination path in add_path must be a" "filename without any subfolder")
         self._get_folder_pathsubfolder.insert_path(src_abs, dst_path)
 
     def get_abs_path(self, path=None, section=None):
@@ -1542,9 +1524,7 @@ class AbstractNode(object):
         #      'path' (internal files)
         if os.path.isabs(path):
             raise ValueError("The path in get_abs_path must be relative")
-        return self.folder.get_subfolder(
-            section, reset_limit=True).get_abs_path(
-            path, check_existence=True)
+        return self.folder.get_subfolder(section, reset_limit=True).get_abs_path(path, check_existence=True)
 
     def store_all(self, with_transaction=True, use_cache=None):
         """
@@ -1685,14 +1665,12 @@ class AbstractNode(object):
 
             if current_autogroup is not None:
                 if not isinstance(current_autogroup, Autogroup):
-                    raise ValidationError(
-                        "current_autogroup is not an AiiDA Autogroup")
+                    raise ValidationError("current_autogroup is not an AiiDA Autogroup")
 
                 if current_autogroup.is_to_be_grouped(self):
                     group_label = current_autogroup.get_group_name()
                     if group_label is not None:
-                        g = Group.objects.get_or_create(
-                            label=group_label, type_string=VERDIAUTOGROUP_TYPE)[0]
+                        g = Group.objects.get_or_create(label=group_label, type_string=VERDIAUTOGROUP_TYPE)[0]
                         g.add_nodes(self)
 
         # This is useful because in this way I can do
@@ -1710,11 +1688,7 @@ class AbstractNode(object):
             if key != Sealable.SEALED_KEY:
                 self._set_attr(key, value)
 
-        self.folder.replace_with_folder(
-            cache_node.folder.abspath,
-            move=False,
-            overwrite=True
-        )
+        self.folder.replace_with_folder(cache_node.folder.abspath, move=False, overwrite=True)
 
         # Make sure the node doesn't have any RETURN links
         if cache_node.get_outgoing(link_type=LinkType.RETURN).all():
@@ -1778,18 +1752,12 @@ class AbstractNode(object):
         """
         computer = self.get_computer()
         return [
-            importlib.import_module(
-                self.__module__.split('.', 1)[0]
-            ).__version__,
-            {
-                key: val for key, val in self.get_attrs().items()
-                if (
-                    key not in self._hash_ignored_attributes and
-                    key not in getattr(self, '_updatable_attributes', tuple())
-            )
-            },
-            self.folder,
-            computer.uuid if computer is not None else None
+            importlib.import_module(self.__module__.split('.', 1)[0]).__version__, {
+                key: val
+                for key, val in self.get_attrs().items()
+                if (key not in self._hash_ignored_attributes and
+                    key not in getattr(self, '_updatable_attributes', tuple()))
+            }, self.folder, computer.uuid if computer is not None else None
         ]
 
     def rehash(self):
@@ -1895,8 +1863,10 @@ class AbstractNode(object):
         from aiida.orm.querybuilder import QueryBuilder
         from aiida.orm import Node
         first_desc = QueryBuilder().append(
-            Node, filters={'id': self.pk}, tag='self').append(
-            Node, with_ancestors='self', project='id').first()
+            Node, filters={
+                'id': self.pk
+            }, tag='self').append(
+                Node, with_ancestors='self', project='id').first()
         return bool(first_desc)
 
     @property
@@ -1908,8 +1878,10 @@ class AbstractNode(object):
         from aiida.orm.querybuilder import QueryBuilder
         from aiida.orm import Node
         first_ancestor = QueryBuilder().append(
-            Node, filters={'id': self.pk}, tag='self').append(
-            Node, with_descendants='self', project='id').first()
+            Node, filters={
+                'id': self.pk
+            }, tag='self').append(
+                Node, with_descendants='self', project='id').first()
         return bool(first_ancestor)
 
     # pylint: disable=no-self-argument
@@ -1961,5 +1933,3 @@ class AbstractNode(object):
             process_class = getattr(module, class_name)
 
         return process_class
-
-

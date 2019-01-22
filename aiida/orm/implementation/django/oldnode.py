@@ -17,8 +17,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
 from django.db.models import F
 
-from aiida.common.exceptions import (InternalError, ModificationNotAllowed,
-                                     NotExistent, UniquenessError)
+from aiida.common.exceptions import (InternalError, ModificationNotAllowed, NotExistent, UniquenessError)
 from aiida.common.folders import RepositoryFolder
 from aiida.common.links import LinkType
 from aiida.common.utils import get_new_uuid
@@ -38,8 +37,7 @@ class Node(AbstractNode):
         except ObjectDoesNotExist:
             raise NotExistent("No entry with UUID={} found".format(uuid))
         if not isinstance(node, cls):
-            raise NotExistent("UUID={} is not an instance of {}".format(
-                uuid, cls.__name__))
+            raise NotExistent("UUID={} is not an instance of {}".format(uuid, cls.__name__))
         return node
 
     @classmethod
@@ -51,8 +49,7 @@ class Node(AbstractNode):
         except ObjectDoesNotExist:
             raise NotExistent("No entry with pk= {} found".format(pk))
         if not isinstance(node, cls):
-            raise NotExistent("pk= {} is not an instance of {}".format(
-                pk, cls.__name__))
+            raise NotExistent("pk= {} is not an instance of {}".format(pk, cls.__name__))
         return node
 
     @classmethod
@@ -60,8 +57,7 @@ class Node(AbstractNode):
         from aiida.backends.djsite.db.models import DbNode
         if cls._plugin_type_string:
             if not cls._plugin_type_string.endswith('.'):
-                raise InternalError("The plugin type string does not "
-                                    "finish with a dot??")
+                raise InternalError("The plugin type string does not " "finish with a dot??")
 
             # If it is 'calculation.Calculation.', we want to filter
             # for things that start with 'calculation.' and so on
@@ -72,8 +68,7 @@ class Node(AbstractNode):
                 plug_type = '.'.join(plug_type.split('.')[2:])
             pre, sep, _ = plug_type[:-1].rpartition('.')
             superclass_string = "".join([pre, sep])
-            return DbNode.aiidaobjects.filter(
-                *args, type__startswith=superclass_string, **kwargs)
+            return DbNode.aiidaobjects.filter(*args, type__startswith=superclass_string, **kwargs)
         else:
             # Base Node class, with empty string
             return DbNode.aiidaobjects.filter(*args, **kwargs)
@@ -96,11 +91,9 @@ class Node(AbstractNode):
             if not isinstance(dbnode, DbNode):
                 raise TypeError("dbnode is not a DbNode instance")
             if dbnode.pk is None:
-                raise ValueError("If cannot load an aiida.orm.Node instance "
-                                 "from an unsaved Django DbNode object.")
+                raise ValueError("If cannot load an aiida.orm.Node instance " "from an unsaved Django DbNode object.")
             if kwargs:
-                raise ValueError("If you pass a dbnode, you cannot pass any "
-                                 "further parameter")
+                raise ValueError("If you pass a dbnode, you cannot pass any " "further parameter")
 
             # If I am loading, I cannot modify it
             self._to_be_stored = False
@@ -108,8 +101,7 @@ class Node(AbstractNode):
             self._dbnode = dbnode
 
             # If this is changed, fix also the importer
-            self._repo_folder = RepositoryFolder(section=self._section_name,
-                                                 uuid=self.uuid)
+            self._repo_folder = RepositoryFolder(section=self._section_name, uuid=self.uuid)
 
         # NO VALIDATION ON __init__ BY DEFAULT, IT IS TOO SLOW SINCE IT OFTEN
         # REQUIRES MULTIPLE DB HITS
@@ -125,9 +117,7 @@ class Node(AbstractNode):
         else:
             # TODO: allow to get the user from the parameters
             user = orm.User.objects.get_default().backend_entity
-            self._dbnode = DbNode(user=user.dbmodel,
-                                  uuid=get_new_uuid(),
-                                  type=self._plugin_type_string)
+            self._dbnode = DbNode(user=user.dbmodel, uuid=get_new_uuid(), type=self._plugin_type_string)
 
             self._to_be_stored = True
 
@@ -137,8 +127,7 @@ class Node(AbstractNode):
             # Used only before the first save
             self._attrs_cache = {}
             # If this is changed, fix also the importer
-            self._repo_folder = RepositoryFolder(section=self._section_name,
-                                                 uuid=self.uuid)
+            self._repo_folder = RepositoryFolder(section=self._section_name, uuid=self.uuid)
 
             # Automatically set all *other* attributes, if possible, otherwise
             # stop
@@ -149,8 +138,7 @@ class Node(AbstractNode):
         from aiida.backends.djsite.db.models import DbNode
         if cls._plugin_type_string:
             if not cls._plugin_type_string.endswith('.'):
-                raise InternalError("The plugin type string does not "
-                                    "finish with a dot??")
+                raise InternalError("The plugin type string does not " "finish with a dot??")
 
             # If it is 'calculation.Calculation.', we want to filter
             # for things that start with 'calculation.' and so on
@@ -161,8 +149,7 @@ class Node(AbstractNode):
                 plug_type = '.'.join(plug_type.split('.')[2:])
             pre, sep, _ = plug_type[:-1].rpartition('.')
             superclass_string = "".join([pre, sep])
-            return DbNode.aiidaobjects.filter(
-                *args, type__startswith=superclass_string, **kwargs)
+            return DbNode.aiidaobjects.filter(*args, type__startswith=superclass_string, **kwargs)
         else:
             # Base Node class, with empty string
             return DbNode.aiidaobjects.filter(*args, **kwargs)
@@ -211,14 +198,12 @@ class Node(AbstractNode):
             raise ValueError("Cannot link to itself")
 
         if not src.is_stored:
-            raise ModificationNotAllowed(
-                "Cannot call the internal _add_dblink_from if the "
-                "source node is not stored")
+            raise ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
+                                         "source node is not stored")
 
         if not self.is_stored:
-            raise ModificationNotAllowed(
-                "Cannot call the internal _add_dblink_from if the "
-                "destination node is not stored")
+            raise ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
+                                         "destination node is not stored")
 
         if link_type is LinkType.CREATE or link_type is LinkType.INPUT_CALC or link_type is LinkType.INPUT_WORK:
             # Check for cycles. This works if the transitive closure is enabled; if it
@@ -228,10 +213,13 @@ class Node(AbstractNode):
             # I am linking src->self; a loop would be created if a DbPath exists already
             # in the TC table from self to src
             if QueryBuilder().append(
-                    Node, filters={'id': self.pk}, tag='parent').append(
-                Node, filters={'id': src.pk}, tag='child', with_ancestors='parent').count() > 0:
-                raise ValueError(
-                    "The link you are attempting to create would generate a loop")
+                    Node, filters={
+                        'id': self.pk
+                    }, tag='parent').append(
+                        Node, filters={
+                            'id': src.pk
+                        }, tag='child', with_ancestors='parent').count() > 0:
+                raise ValueError("The link you are attempting to create would generate a loop")
 
         self._do_create_link(src, label, link_type)
 
@@ -243,14 +231,11 @@ class Node(AbstractNode):
             # transactions are needed here for Postgresql:
             # https://docs.djangoproject.com/en/1.5/topics/db/transactions/#handling-exceptions-within-postgresql-transactions
             sid = transaction.savepoint()
-            DbLink.objects.create(input=src._dbnode, output=self._dbnode,
-                                  label=label, type=link_type.value)
+            DbLink.objects.create(input=src._dbnode, output=self._dbnode, label=label, type=link_type.value)
             transaction.savepoint_commit(sid)
         except IntegrityError as exc:
             transaction.savepoint_rollback(sid)
-            raise UniquenessError("There is already a link with the same "
-                                  "name (raw message was {})"
-                                  "".format(exc))
+            raise UniquenessError("There is already a link with the same " "name (raw message was {})" "".format(exc))
 
     def _get_db_input_links(self, link_type):
         from aiida.orm.convert import get_orm_entity
@@ -259,8 +244,7 @@ class Node(AbstractNode):
         link_filter = {'output': self._dbnode}
         if link_type is not None:
             link_filter['type'] = link_type.value
-        return [(i.label, get_orm_entity(i.input)) for i in
-                DbLink.objects.filter(**link_filter).distinct()]
+        return [(i.label, get_orm_entity(i.input)) for i in DbLink.objects.filter(**link_filter).distinct()]
 
     def _get_db_output_links(self, link_type):
         from aiida.orm.convert import get_orm_entity
@@ -269,8 +253,7 @@ class Node(AbstractNode):
         link_filter = {'input': self._dbnode}
         if link_type is not None:
             link_filter['type'] = link_type.value
-        return ((i.label, get_orm_entity(i.output)) for i in
-                DbLink.objects.filter(**link_filter).distinct())
+        return ((i.label, get_orm_entity(i.output)) for i in DbLink.objects.filter(**link_filter).distinct())
 
     def get_computer(self):
         """
@@ -283,8 +266,7 @@ class Node(AbstractNode):
         if self._dbnode.dbcomputer is None:
             return None
 
-        return orm.Computer.from_backend_entity(
-            self._backend.computers.from_dbmodel(self._dbnode.dbcomputer))
+        return orm.Computer.from_backend_entity(self._backend.computers.from_dbmodel(self._dbnode.dbcomputer))
 
     def _set_db_computer(self, computer):
         type_check(computer, computers.DjangoComputer)
@@ -308,26 +290,22 @@ class Node(AbstractNode):
     def _del_db_attr(self, key):
         from aiida.backends.djsite.db.models import DbAttribute
         if not DbAttribute.has_key(self._dbnode, key):
-            raise AttributeError("DbAttribute {} does not exist".format(
-                key))
+            raise AttributeError("DbAttribute {} does not exist".format(key))
         DbAttribute.del_value_for_node(self._dbnode, key)
         self._increment_version_number_db()
 
     def _get_db_attr(self, key):
         from aiida.backends.djsite.db.models import DbAttribute
-        return DbAttribute.get_value_for_node(
-            dbnode=self._dbnode, key=key)
+        return DbAttribute.get_value_for_node(dbnode=self._dbnode, key=key)
 
     def _set_db_extra(self, key, value, exclusive=False):
         from aiida.backends.djsite.db.models import DbExtra
 
-        DbExtra.set_value_for_node(self._dbnode, key, value,
-                                   stop_if_existing=exclusive)
+        DbExtra.set_value_for_node(self._dbnode, key, value, stop_if_existing=exclusive)
         self._increment_version_number_db()
 
     def _reset_db_extras(self, new_extras):
-        raise NotImplementedError("Reset of extras has not been implemented"
-                                  "for Django backend.")
+        raise NotImplementedError("Reset of extras has not been implemented" "for Django backend.")
 
     def _get_db_extra(self, key):
         from aiida.backends.djsite.db.models import DbExtra
@@ -336,8 +314,7 @@ class Node(AbstractNode):
     def _del_db_extra(self, key):
         from aiida.backends.djsite.db.models import DbExtra
         if not DbExtra.has_key(self._dbnode, key):
-            raise AttributeError("DbExtra {} does not exist".format(
-                key))
+            raise AttributeError("DbExtra {} does not exist".format(key))
         return DbExtra.del_value_for_node(self._dbnode, key)
         self._increment_version_number_db()
 
@@ -513,8 +490,7 @@ class Node(AbstractNode):
         # I assume that if a node exists in the DB, its folder is in place.
         # On the other hand, periodically the user might need to run some
         # bookkeeping utility to check for lone folders.
-        self._repository_folder.replace_with_folder(
-            self._get_temp_folder().abspath, move=True, overwrite=True)
+        self._repository_folder.replace_with_folder(self._get_temp_folder().abspath, move=True, overwrite=True)
 
         # I do the transaction only during storage on DB to avoid timeout
         # problems, especially with SQLite
@@ -524,9 +500,7 @@ class Node(AbstractNode):
                 self._dbnode.save()
                 # Save its attributes 'manually' without incrementing
                 # the version for each add.
-                DbAttribute.reset_values_for_node(self._dbnode,
-                                                  attributes=self._attrs_cache,
-                                                  with_transaction=False)
+                DbAttribute.reset_values_for_node(self._dbnode, attributes=self._attrs_cache, with_transaction=False)
                 # This should not be used anymore: I delete it to
                 # possibly free memory
                 del self._attrs_cache
@@ -543,8 +517,7 @@ class Node(AbstractNode):
         except:
             # I put back the files in the sandbox folder since the
             # transaction did not succeed
-            self._get_temp_folder().replace_with_folder(
-                self._repository_folder.abspath, move=True, overwrite=True)
+            self._get_temp_folder().replace_with_folder(self._repository_folder.abspath, move=True, overwrite=True)
             raise
 
         from aiida.backends.djsite.db.models import DbExtra

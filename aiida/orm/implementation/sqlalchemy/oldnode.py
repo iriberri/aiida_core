@@ -196,8 +196,7 @@ class Node(AbstractNode):
         if self._dbnode.dbcomputer is None:
             return None
 
-        return orm.Computer.from_backend_entity(
-            self.backend.computers.from_dbmodel(self._dbnode.dbcomputer))
+        return orm.Computer.from_backend_entity(self.backend.computers.from_dbmodel(self._dbnode.dbcomputer))
 
     def _get_db_label_field(self):
         """
@@ -262,9 +261,9 @@ class Node(AbstractNode):
                     Node, filters={
                         'id': self.pk
                     }, tag='parent').append(
-                Node, filters={
-                    'id': src.pk
-                }, tag='child', with_ancestors='parent').count() > 0:
+                        Node, filters={
+                            'id': src.pk
+                        }, tag='child', with_ancestors='parent').count() > 0:
                 raise ValueError("The link you are attempting to create would generate a loop")
 
         self._do_create_link(src, label, link_type)
