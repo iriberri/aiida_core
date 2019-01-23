@@ -203,7 +203,8 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
 
     # region db_columns
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def nodeversion(self):
         """
         Get the version number for this node
@@ -211,6 +212,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         :return: the version number
         :rtype: int
         """
+        pass
 
     @abc.abstractmethod
     def _increment_version_number(self):
@@ -218,8 +220,8 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         Increment the node version number of this node by one
         directly in the database
         """
-
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def uuid(self):
         """
         The node UUID
@@ -227,13 +229,36 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         :return: the uuid
         """
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def process_type(self):
         """
         The node process_type
 
         :return: the process type
         """
+
+    @property
+    @abc.abstractmethod
+    def public(self):
+        """
+        Return the value of the 'public' field in the DB
+        """
+        self._ensure_model_uptodate(attribute_names=['public'])
+        return self._dbmodel.public
+
+    @abc.abstractmethod
+    def _ensure_model_uptodate(self, attribute_names=None):
+        """
+        Expire specific fields of the dbmodel (or, if attribute_names
+        is not specified, all of them), so they will be re-fetched
+        from the DB.
+
+        :param attribute_names: by default, expire all columns.
+             If you want to expire only specific columns, pass
+             a list of strings with the column names.
+        """
+        pass
 
     @abc.abstractmethod
     def get_computer(self):
@@ -303,6 +328,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         """
         Return the creation time of the node.
         """
+        pass
 
     @property
     @abc.abstractmethod
@@ -310,6 +336,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         """
         Return the modification time of the node.
         """
+        pass
 
     @property
     @abc.abstractmethod
@@ -319,15 +346,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
 
         :return: a string.
         """
-
-    @property
-    @abc.abstractmethod
-    def nodeversion(self):
-        """
-        Return the version of the 
-        :return: A version integer
-        :rtype: int
-        """
+        pass
 
     @property
     @abc.abstractmethod
@@ -337,6 +356,8 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
 
         :return: a string.
         """
+        return self._get_db_label_field()
+
 
     @label.setter
     @abc.abstractmethod
@@ -346,6 +367,23 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
 
         :param label: a string
         """
+        self._update_db_label_field()
+
+    @abstractmethod
+    def _get_db_label_field(self):
+        """
+        Get the label field acting directly on the DB
+
+        :return: a string.
+        """
+        pass
+
+    @abstractmethod
+    def _update_db_label_field(self, field_value):
+        """
+        Set the label field acting directly on the DB
+        """
+        pass
 
     @property
     @abc.abstractmethod
@@ -356,7 +394,8 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         :return: a string
         :rtype: str
         """
-
+        return self._get_db_description_field()
+        
     @description.setter
     @abc.abstractmethod
     def description(self, description):
@@ -365,6 +404,23 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
 
         :param desc: a string
         """
+        self._update_db_label_field(label)
+
+    @abstractmethod
+    def _get_db_description_field(self):
+        """
+        Get the description of this node, acting directly at the DB level
+        """
+        pass
+
+    @abstractmethod
+    def _update_db_description_field(self, field_value):
+        """
+        Update the description of this node, acting directly at the DB level
+
+        :param field_value: the new value of the description field
+        """
+        pass
 
     # endregion
 

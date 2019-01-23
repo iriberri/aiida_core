@@ -110,23 +110,3 @@ class Node(AbstractNode):
             # Automatically set all *other* attributes, if possible, otherwise
             # stop
             self._set_with_defaults(**kwargs)
-
-    def _db_label_field(self):
-        return self._dbnode.label
-
-    def _update_db_label_field(self, field_value):
-        self._dbnode.label = field_value
-        if self.is_stored:
-            with transaction.atomic():
-                self._dbnode.save()
-                self._increment_version_number_db()
-
-    def _get_db_description_field(self):
-        return self._dbnode.description
-
-    def _update_db_description_field(self, field_value):
-        self._dbnode.description = field_value
-        if self.is_stored:
-            with transaction.atomic():
-                self._dbnode.save()
-                self._increment_version_number_db()

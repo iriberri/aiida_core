@@ -176,81 +176,10 @@ class AbstractNode(object):
                 raise ValueError("Unable to set '{0}', set_{0} is not " "callable!".format(k))
             method(v)
 
-    @abstractproperty
-    def nodeversion(self):
-        """
-        Return the version of the node
 
-        :return: A version integer
-        """
-        pass
+    
 
-    @property
-    def label(self):
-        """
-        Get the label of the node.
 
-        :return: a string.
-        """
-        return self._get_db_label_field()
-
-    @label.setter
-    def label(self, label):
-        """
-        Set the label of the node.
-
-        :param label: a string
-        """
-        self._update_db_label_field(label)
-
-    @abstractmethod
-    def _get_db_label_field(self):
-        """
-        Get the label field acting directly on the DB
-
-        :return: a string.
-        """
-        pass
-
-    @abstractmethod
-    def _update_db_label_field(self, field_value):
-        """
-        Set the label field acting directly on the DB
-        """
-        pass
-
-    @property
-    def description(self):
-        """
-        Get the description of the node.
-
-        :return: a string
-        :rtype: str
-        """
-        return self._get_db_description_field()
-
-    @description.setter
-    def description(self, desc):
-        """
-        Set the description of the node
-
-        :param desc: a string
-        """
-        self._update_db_description_field(desc)
-
-    @abstractmethod
-    def _get_db_description_field(self):
-        """
-        Get the description of this node, acting directly at the DB level
-        """
-        pass
-
-    @abstractmethod
-    def _update_db_description_field(self, field_value):
-        """
-        Update the description of this node, acting directly at the DB level
-        """
-        pass
 
     def _store_from_cache(self, cache_node, with_transaction):
         from aiida.orm.mixins import Sealable

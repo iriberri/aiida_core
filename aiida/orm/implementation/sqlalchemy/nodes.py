@@ -252,6 +252,54 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         backend_user = user.backend_entity
         self._dbmodel.user = backend_user.dbmodel
 
+    def _get_db_label_field(self):
+        """
+        Get the label field acting directly on the DB
+
+        :return: a string.
+        """
+        self._ensure_model_uptodate(attribute_names=['label'])
+        return self._dbmodel.label
+
+    def _update_db_label_field(self, field_value):
+        """
+        Set the label field acting directly on the DB
+
+        :param field_value: the new value of the label field
+        """
+        from aiida.backends.sqlalchemy import get_scoped_session
+        session = get_scoped_session()
+
+        self._dbmodel.label = field_value
+        if self.is_stored:
+            session.add(self._dbmodel)
+            self._increment_version_number_db()
+
+    def _get_db_description_field(self):
+        """
+        Get the description of the node.
+
+        :return: a string
+        :rtype: str
+        """
+        self._ensure_model_uptodate(attribute_names=['description'])
+        return self._dbmodel.description
+
+    def _update_db_description_field(self, field_value):
+        """
+        Update the description of this node, acting directly at the DB level
+
+        :param field_value: the new value of the description field
+        """
+        from aiida.backends.sqlalchemy import get_scoped_session
+        session = get_scoped_session()
+
+        self._dbmodel.description = field_value
+        if self.is_stored:
+            session.add(self._dbmodel)
+            self._increment_version_number_db()
+
+
     def _set_db_extra(self, key, value, exclusive=False):
         """
         Store extra directly in the DB, without checks.

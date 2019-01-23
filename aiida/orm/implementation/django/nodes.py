@@ -57,6 +57,18 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         # otherwise I only get the Django Field F object as a result!
         self._dbmodel = self.MODEL_CLASS.objects.get(pk=self._dbmodel.pk)
 
+    def _ensure_model_uptodate(self, attribute_names=None):
+        """
+        Expire specific fields of the dbmodel (or, if attribute_names
+        is not specified, all of them), so they will be re-fetched
+        from the DB.
+
+        :param attribute_names: by default, expire all columns.
+             If you want to expire only specific columns, pass
+             a list of strings with the column names.
+        """
+        pass
+
     def _get_db_attrs_items(self):
         """
         Iterator over the attributes, returning tuples (key, value),
@@ -204,6 +216,44 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         type_check(user, user.User)
         assert user.backend == self.backend, "Passed user from different backend"
         self._dbmodel.user = user.backend_entity.dbmodel
+
+    def _get_db_label_field(self):
+        """
+        Get the label field acting directly on the DB
+
+        :return: a string.
+        """
+        return self._dbmodel.label
+
+    def _update_db_label_field(self, field_value):
+        """
+        Set the label field acting directly on the DB
+
+        :param field_value: the new value of the label field
+        """
+        self._dbmodel.label = field_value
+        if self.is_stored:
+            with transaction.atomic():
+                self._dbmodel.save()
+                self._increment_version_number()
+
+    def _get_db_description_field(self):
+        """
+        Get the description of this node, acting directly at the DB level
+        """
+        return self._dbmodel.description
+
+    def _update_db_description_field(self, field_value):
+        """
+        Update the description of this node, acting directly at the DB level
+
+        :param field_value: the new value of the description field
+        """
+        self._dbmodel.description = field_value
+        if self.is_stored:
+            with transaction.atomic():
+                self._dbmodel.save()
+                self._increment_version_number()
 
     def _set_db_extra(self, key, value, exclusive=False):
         """
