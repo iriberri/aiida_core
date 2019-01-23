@@ -20,6 +20,7 @@ from aiida.backends.sqlalchemy.models import link as link_models
 from aiida.backends.sqlalchemy import get_scoped_session
 from aiida.common import exceptions
 from aiida.common.links import LinkType
+from aiida.common.hashing import _HASH_EXTRA_KEY
 
 from .. import BackendNode, BackendNodeCollection
 from . import entities
@@ -217,7 +218,7 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         return orm.Computer.from_backend_entity(self.backend.computers.from_dbmodel(self._dbmodel.dbcomputer))
 
     def _set_db_computer(self, computer):
-                """
+        """
         Set the computer directly inside the dbnode member, in the DB.
 
         DO NOT USE DIRECTLY.
@@ -352,10 +353,10 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
 
         if not self.is_stored:
             raise exceptions.ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
-                                         "destination node is not stored")
+                                                    "destination node is not stored")
         if not src.is_stored:
             raise exceptions.ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
-                                         "source node is not stored")
+                                                    "source node is not stored")
 
         # Check for cycles. This works if the transitive closure is enabled; if
         # it isn't, this test will never fail, but then having a circular link
@@ -394,6 +395,78 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
             raise exceptions.UniquenessError(
                 "There is already a link with the same name (raw message was {})".format(exc))
 
+    def _db_store(self, with_transaction=True):
+        """
+        Store a new node in the DB, also saving its repository directory
+        and attributes.
+
+        After being called attributes cannot be
+        changed anymore! Instead, extras can be changed only AFTER calling
+        this store() function.
+
+        :note: After successful storage, those links that are in the cache, and
+            for which also the parent node is already stored, will be
+            automatically stored. The others will remain unstored.
+
+        :parameter with_transaction: if False, no transaction is used. This
+          is meant to be used ONLY if the outer calling function has already
+          a transaction open!
+        """
+        from aiida.backends.sqlalchemy import get_scoped_session
+        session = get_scoped_session()
+
+        # TODO: unify as much as possible the logic.
+        ## This probably should only be a "DBSTORE", not dealing
+        ## with how the repository is stored. See also notes
+        ## in the django case.
+
+        # I save the corresponding model entry
+        # I set the folder
+        # NOTE: I first store the files, then only if this is successful,
+        # I store the DB entry. In this way,
+        # I assume that if a node exists in the DB, its folder is in place.
+        # On the other hand, periodically the user might need to run some
+        # bookkeeping utility to check for lone folders.
+        self._repository_folder.replace_with_folder(self._get_temp_folder().abspath, move=True, overwrite=True)
+
+        try:
+            session.add(self._dbmodel)
+            # Save its attributes 'manually' without incrementing
+            # the version for each add.
+            self._dbmodels.attributes = self._attrs_cache
+            flag_modified(self._dbnode, "attributes")
+            # This should not be used anymore: I delete it to
+            # possibly free memory
+            del self._attrs_cache
+
+            self._temp_folder = None
+            self._to_be_stored = False
+
+            # Here, I store those links that were in the cache and
+            # that are between stored nodes.
+            self._store_cached_input_links(with_transaction=False)
+
+            if with_transaction:
+                try:
+                    # aiida.backends.sqlalchemy.get_scoped_session().commit()
+                    session.commit()
+                except SQLAlchemyError:
+                    # print "Cannot store the node. Original exception: {" \
+                    #      "}".format(e)
+                    session.rollback()
+                    raise
+
+        # This is one of the few cases where it is ok to do a 'global'
+        # except, also because I am re-raising the exception
+        except:
+            # I put back the files in the sandbox folder since the
+            # transaction did not succeed
+            self._get_temp_folder().replace_with_folder(self._repository_folder.abspath, move=True, overwrite=True)
+            raise
+
+        self._dbmodel.set_extra(_HASH_EXTRA_KEY, self.get_hash())
+        return self
+
     # region Deprecated
     def _get_db_input_links(self, link_type):
         from aiida.orm.convert import get_orm_entity
@@ -401,7 +474,9 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         link_filter = {'output': self._dbnode}
         if link_type is not None:
             link_filter['type'] = link_type.value
-        return [(i.label, get_orm_entity(i.input)) for i in self.LINK_CLASS.query.filter_by(**link_filter).distinct().all()]
+        return [
+            (i.label, get_orm_entity(i.input)) for i in self.LINK_CLASS.query.filter_by(**link_filter).distinct().all()
+        ]
 
     def _get_db_output_links(self, link_type):
         from aiida.orm.convert import get_orm_entity
@@ -409,9 +484,11 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         link_filter = {'input': self._dbnode}
         if link_type is not None:
             link_filter['type'] = link_type.value
-        return ((i.label, get_orm_entity(i.output)) for i in self.LINK_CLASS.query.filter_by(**link_filter).distinct().all())
+        return ((i.label, get_orm_entity(i.output))
+                for i in self.LINK_CLASS.query.filter_by(**link_filter).distinct().all())
 
     # endregion
+
 
 class SqlaNodeCollection(BackendNodeCollection):
     """The SQLA collection for nodes"""

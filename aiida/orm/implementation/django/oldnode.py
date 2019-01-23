@@ -27,30 +27,29 @@ from aiida.orm.implementation.general.node import AbstractNode, _HASH_EXTRA_KEY
 
 class Node(AbstractNode):
 
-    @classmethod
-    def get_subclass_from_uuid(cls, uuid):
-        from .convert import get_backend_entity
-        from aiida.backends.djsite.db.models import DbNode
-        try:
-            node = get_backend_entity(DbNode.objects.get(uuid=uuid), None)
-        except ObjectDoesNotExist:
-            raise NotExistent("No entry with UUID={} found".format(uuid))
-        if not isinstance(node, cls):
-            raise NotExistent("UUID={} is not an instance of {}".format(uuid, cls.__name__))
-        return node
+    # @classmethod
+    # def get_subclass_from_uuid(cls, uuid):
+    #     from .convert import get_backend_entity
+    #     from aiida.backends.djsite.db.models import DbNode
+    #     try:
+    #         node = get_backend_entity(DbNode.objects.get(uuid=uuid), None)
+    #     except ObjectDoesNotExist:
+    #         raise NotExistent("No entry with UUID={} found".format(uuid))
+    #     if not isinstance(node, cls):
+    #         raise NotExistent("UUID={} is not an instance of {}".format(uuid, cls.__name__))
+    #     return node
 
-    @classmethod
-    def get_subclass_from_pk(cls, pk):
-        from .convert import get_backend_entity
-        from aiida.backends.djsite.db.models import DbNode
-        try:
-            node = get_backend_entity(DbNode.objects.get(pk=pk), None)
-        except ObjectDoesNotExist:
-            raise NotExistent("No entry with pk= {} found".format(pk))
-        if not isinstance(node, cls):
-            raise NotExistent("pk= {} is not an instance of {}".format(pk, cls.__name__))
-        return node
-
+    # @classmethod
+    # def get_subclass_from_pk(cls, pk):
+    #     from .convert import get_backend_entity
+    #     from aiida.backends.djsite.db.models import DbNode
+    #     try:
+    #         node = get_backend_entity(DbNode.objects.get(pk=pk), None)
+    #     except ObjectDoesNotExist:
+    #         raise NotExistent("No entry with pk= {} found".format(pk))
+    #     if not isinstance(node, cls):
+    #         raise NotExistent("pk= {} is not an instance of {}".format(pk, cls.__name__))
+    #     return node
 
     def __init__(self, **kwargs):
         from aiida.backends.djsite.db.models import DbNode
@@ -112,30 +111,6 @@ class Node(AbstractNode):
             # stop
             self._set_with_defaults(**kwargs)
 
-    @classmethod
-    def query(cls, *args, **kwargs):
-        from aiida.backends.djsite.db.models import DbNode
-        if cls._plugin_type_string:
-            if not cls._plugin_type_string.endswith('.'):
-                raise InternalError("The plugin type string does not " "finish with a dot??")
-
-            # If it is 'calculation.Calculation.', we want to filter
-            # for things that start with 'calculation.' and so on
-            plug_type = cls._plugin_type_string
-
-            # Remove the implementation.django or sqla part.
-            if plug_type.startswith('implementation.'):
-                plug_type = '.'.join(plug_type.split('.')[2:])
-            pre, sep, _ = plug_type[:-1].rpartition('.')
-            superclass_string = "".join([pre, sep])
-            return DbNode.aiidaobjects.filter(*args, type__startswith=superclass_string, **kwargs)
-        else:
-            # Base Node class, with empty string
-            return DbNode.aiidaobjects.filter(*args, **kwargs)
-
-
-
-
     def _db_label_field(self):
         return self._dbnode.label
 
@@ -155,150 +130,3 @@ class Node(AbstractNode):
             with transaction.atomic():
                 self._dbnode.save()
                 self._increment_version_number_db()
-
-
-    def _db_store_all(self, with_transaction=True, use_cache=None):
-        """
-        Store the node, together with all input links, if cached, and also the
-        linked nodes, if they were not stored yet.
-
-        :parameter with_transaction: if False, no transaction is used. This
-          is meant to be used ONLY if the outer calling function has already
-          a transaction open!
-        """
-        from django.db import transaction
-        from aiida.common.lang import EmptyContextManager
-
-        if with_transaction:
-            context_man = transaction.atomic()
-        else:
-            context_man = EmptyContextManager()
-
-        with context_man:
-            # Always without transaction: either it is the context_man here,
-            # or it is managed outside
-            self._store_input_nodes()
-            self.store(with_transaction=False, use_cache=use_cache)
-            self._store_cached_input_links(with_transaction=False)
-
-        return self
-
-
-    def _store_cached_input_links(self, with_transaction=True):
-        """
-        Store all input links that are in the local cache, transferring them
-        to the DB.
-
-        :note: This can be called only if all parents are already stored.
-
-        :note: Links are stored only after the input nodes are stored. Moreover,
-            link storage is done in a transaction, and if one of the links
-            cannot be stored, an exception is raised and *all* links will remain
-            in the cache.
-
-        :note: This function can be called only after the node is stored.
-           After that, it can be called multiple times, and nothing will be
-           executed if no links are still in the cache.
-
-        :parameter with_transaction: if False, no transaction is used. This
-          is meant to be used ONLY if the outer calling function has already
-          a transaction open!
-        """
-        from django.db import transaction
-        from aiida.common.lang import EmptyContextManager
-
-        if with_transaction:
-            context_man = transaction.atomic()
-        else:
-            context_man = EmptyContextManager()
-
-        if not self.is_stored:
-            raise ModificationNotAllowed('cannot store cached incoming links for unstored Node<{}>'.format(self.pk))
-
-        with context_man:
-            # This raises if there is an unstored node.
-            self._check_are_parents_stored()
-
-            # I have to store only those links where the source is already stored
-            for link_triple in self._incoming_cache:
-                self._add_dblink_from(*link_triple)
-
-            # If everything went smoothly, clear the entries from the cache.
-            # I do it here because I delete them all at once if no error
-            # occurred; otherwise, links will not be stored and I
-            # should not delete them from the cache (but then an exception
-            # would have been raised, and the following lines are not executed)
-            self._incoming_cache = list()
-
-    def _db_store(self, with_transaction=True):
-        """
-        Store a new node in the DB, also saving its repository directory
-        and attributes.
-
-        After being called attributes cannot be
-        changed anymore! Instead, extras can be changed only AFTER calling
-        this store() function.
-
-        :note: After successful storage, those links that are in the cache, and
-            for which also the parent node is already stored, will be
-            automatically stored. The others will remain unstored.
-
-        :parameter with_transaction: if False, no transaction is used. This
-          is meant to be used ONLY if the outer calling function has already
-          a transaction open!
-
-        :param bool use_cache: Whether I attempt to find an equal node in the DB.
-        """
-        # TODO: This needs to be generalized, allowing for flexible methods
-        # for storing data and its attributes.
-        from django.db import transaction
-        from aiida.common.lang import EmptyContextManager
-        from aiida.backends.djsite.db.models import DbAttribute
-
-        if with_transaction:
-            context_man = transaction.atomic()
-        else:
-            context_man = EmptyContextManager()
-
-        # I save the corresponding django entry
-        # I set the folder
-        # NOTE: I first store the files, then only if this is successful,
-        # I store the DB entry. In this way,
-        # I assume that if a node exists in the DB, its folder is in place.
-        # On the other hand, periodically the user might need to run some
-        # bookkeeping utility to check for lone folders.
-        self._repository_folder.replace_with_folder(self._get_temp_folder().abspath, move=True, overwrite=True)
-
-        # I do the transaction only during storage on DB to avoid timeout
-        # problems, especially with SQLite
-        try:
-            with context_man:
-                # Save the row
-                self._dbnode.save()
-                # Save its attributes 'manually' without incrementing
-                # the version for each add.
-                DbAttribute.reset_values_for_node(self._dbnode, attributes=self._attrs_cache, with_transaction=False)
-                # This should not be used anymore: I delete it to
-                # possibly free memory
-                del self._attrs_cache
-
-                self._temp_folder = None
-                self._to_be_stored = False
-
-                # Here, I store those links that were in the cache and
-                # that are between stored nodes.
-                self._store_cached_input_links()
-
-        # This is one of the few cases where it is ok to do a 'global'
-        # except, also because I am re-raising the exception
-        except:
-            # I put back the files in the sandbox folder since the
-            # transaction did not succeed
-            self._get_temp_folder().replace_with_folder(self._repository_folder.abspath, move=True, overwrite=True)
-            raise
-
-        from aiida.backends.djsite.db.models import DbExtra
-        # I store the hash without cleaning and without incrementing the nodeversion number
-        DbExtra.set_value_for_node(self._dbnode, _HASH_EXTRA_KEY, self.get_hash())
-
-        return self

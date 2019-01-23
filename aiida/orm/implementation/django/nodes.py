@@ -14,6 +14,7 @@ from __future__ import absolute_import
 import six
 
 from aiida.backends.djsite.db import models
+from aiida.common.hashing import _HASH_EXTRA_KEY
 
 from .. import BackendNode, BackendNodeCollection
 from . import entities
@@ -80,7 +81,7 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         """
         attrlist = self.ATTRIBUTE_CLASS.list_all_node_elements(self._dbmodel)
         for attr in attrlist:
-            yield attr.key   
+            yield attr.key
 
     def _set_db_attr(self, key, value):
         """
@@ -204,7 +205,7 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         assert user.backend == self.backend, "Passed user from different backend"
         self._dbmodel.user = user.backend_entity.dbmodel
 
-    def _set_db_extra(self, key, value, exclusive=False):        
+    def _set_db_extra(self, key, value, exclusive=False):
         """
         Store extra directly in the DB, without checks.
 
@@ -220,7 +221,7 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         self.EXTRA_CLASS.set_value_for_node(self._dbmodel, key, value, stop_if_existing=exclusive)
 
     def _reset_db_extras(self, new_extras):
-                """
+        """
         Resets the extras (replacing existing ones) directly in the DB
 
         DO NOT USE DIRECTLY!
@@ -228,7 +229,7 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         :param new_extras: dictionary with new extras
         """
         raise NotImplementedError("Reset of extras has not been implemented" "for Django backend.")
-    
+
     def _get_db_extra(self, key):
         """
         Get an extra, directly from the DB.
@@ -238,9 +239,9 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         :param key: key name
         :return: the key value
         :raise AttributeError: if the key does not exist
-        """        
+        """
         return self.EXTRA_CLASS.get_value_for_node(dbnode=self._dbmodel, key=key)
-    
+
     def _del_db_extra(self, key):
         """
         Delete an extra, directly on the DB.
@@ -262,7 +263,6 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         extraslist = self.EXTRA_CLASS.list_all_node_elements(self._dbmodel)
         for e in extraslist:
             yield (e.key, e.getvalue())
-
 
     def _add_db_link_from(self, src, link_type, label):
         """
@@ -328,6 +328,84 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         except IntegrityError as exc:
             transaction.savepoint_rollback(sid)
             raise UniquenessError("There is already a link with the same " "name (raw message was {})" "".format(exc))
+
+    def _db_store(self, with_transaction=True):
+        """
+        Store a new node in the DB, also saving its repository directory
+        and attributes.
+
+        After being called attributes cannot be
+        changed anymore! Instead, extras can be changed only AFTER calling
+        this store() function.
+
+        :note: After successful storage, those links that are in the cache, and
+            for which also the parent node is already stored, will be
+            automatically stored. The others will remain unstored.
+
+        :parameter with_transaction: if False, no transaction is used. This
+          is meant to be used ONLY if the outer calling function has already
+          a transaction open!
+        """
+        # TODO: This needs to be generalized, allowing for flexible methods
+        # for storing data and its attributes.
+        from django.db import transaction
+        from aiida.common.lang import EmptyContextManager
+        from aiida.backends.djsite.db.models import DbAttribute
+
+        if with_transaction:
+            context_man = transaction.atomic()
+        else:
+            context_man = EmptyContextManager()
+
+        # I save the corresponding django entry
+        # I set the folder
+        # NOTE: I first store the files, then only if this is successful,
+        # I store the DB entry. In this way,
+        # I assume that if a node exists in the DB, its folder is in place.
+        # On the other hand, periodically the user might need to run some
+        # bookkeeping utility to check for lone folders.
+        self._repository_folder.replace_with_folder(self._get_temp_folder().abspath, move=True, overwrite=True)
+
+        # I do the transaction only during storage on DB to avoid timeout
+        # problems, especially with SQLite
+        try:
+            with context_man:
+                # Save the row
+                self._dbmodel.save()
+                # Save its attributes 'manually' without incrementing
+                # the version for each add.
+                self.ATTRIBUTE_CLASS.reset_values_for_node(
+                    self._dbmodel, attributes=self._attrs_cache, with_transaction=False)
+                # This should not be used anymore: I delete it to
+                # possibly free memory
+                ## TODO: this should not be done probably, in case
+                ## of a failed transaction!
+                del self._attrs_cache
+
+                self._temp_folder = None
+                self._to_be_stored = False
+
+                # Here, I store those links that were in the cache and
+                # that are between stored nodes.
+                self._store_cached_input_links()
+
+        # This is one of the few cases where it is ok to do a 'global'
+        # except, also because I am re-raising the exception
+        except:
+            # I put back the files in the sandbox folder since the
+            # transaction did not succeed
+            self._get_temp_folder().replace_with_folder(self._repository_folder.abspath, move=True, overwrite=True)
+
+            ## TODO: check if this is the right thing to do, not only
+            ## when .store() fails (e.g. for we are setting self._temp_folder
+            ## to None) but also when multiple nodes are stored in the same
+            ## transaction and only one fails
+            raise
+
+        # I store the hash without cleaning and without incrementing the nodeversion number
+        self.EXTRA_CLASS.set_value_for_node(self._dbmodel, _HASH_EXTRA_KEY, self.get_hash())
+
+        return self
 
     # region Deprecated
 

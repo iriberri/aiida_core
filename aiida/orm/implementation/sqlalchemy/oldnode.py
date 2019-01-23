@@ -87,62 +87,57 @@ class Node(AbstractNode):
             # stop
             self._set_with_defaults(**kwargs)
 
-    @classmethod
-    def get_subclass_from_uuid(cls, uuid):
-        from aiida.orm.querybuilder import QueryBuilder
-        from sqlalchemy.exc import DatabaseError
-        try:
-            query = QueryBuilder()
-            query.append(cls, filters={'uuid': {'==': str(uuid)}})
+    # @classmethod
+    # def get_subclass_from_uuid(cls, uuid):
+    #     from aiida.orm.querybuilder import QueryBuilder
+    #     from sqlalchemy.exc import DatabaseError
+    #     try:
+    #         query = QueryBuilder()
+    #         query.append(cls, filters={'uuid': {'==': str(uuid)}})
 
-            if query.count() == 0:
-                raise NotExistent("No entry with UUID={} found".format(uuid))
+    #         if query.count() == 0:
+    #             raise NotExistent("No entry with UUID={} found".format(uuid))
 
-            node = query.first()[0]
+    #         node = query.first()[0]
 
-            if not isinstance(node, cls):
-                raise NotExistent("UUID={} is not an instance of {}".format(uuid, cls.__name__))
-            return node
-        except DatabaseError as exc:
-            raise ValueError(str(exc))
+    #         if not isinstance(node, cls):
+    #             raise NotExistent("UUID={} is not an instance of {}".format(uuid, cls.__name__))
+    #         return node
+    #     except DatabaseError as exc:
+    #         raise ValueError(str(exc))
 
-    @classmethod
-    def get_subclass_from_pk(cls, pk):
-        from aiida.orm.querybuilder import QueryBuilder
-        from sqlalchemy.exc import DatabaseError
-        # If it is not an int make a final attempt
-        # to convert to an integer. If you fail,
-        # raise an exception.
-        try:
-            pk = int(pk)
-        except:
-            raise ValueError("Incorrect type for int")
+    # @classmethod
+    # def get_subclass_from_pk(cls, pk):
+    #     from aiida.orm.querybuilder import QueryBuilder
+    #     from sqlalchemy.exc import DatabaseError
+    #     # If it is not an int make a final attempt
+    #     # to convert to an integer. If you fail,
+    #     # raise an exception.
+    #     try:
+    #         pk = int(pk)
+    #     except:
+    #         raise ValueError("Incorrect type for int")
 
-        try:
-            query = QueryBuilder()
-            query.append(cls, filters={'id': {'==': pk}})
+    #     try:
+    #         query = QueryBuilder()
+    #         query.append(cls, filters={'id': {'==': pk}})
 
-            if query.count() == 0:
-                raise NotExistent("No entry with pk= {} found".format(pk))
+    #         if query.count() == 0:
+    #             raise NotExistent("No entry with pk= {} found".format(pk))
 
-            node = query.first()[0]
+    #         node = query.first()[0]
 
-            if not isinstance(node, cls):
-                raise NotExistent("pk= {} is not an instance of {}".format(pk, cls.__name__))
-            return node
-        except DatabaseError as exc:
-            raise ValueError(str(exc))
+    #         if not isinstance(node, cls):
+    #             raise NotExistent("pk= {} is not an instance of {}".format(pk, cls.__name__))
+    #         return node
+    #     except DatabaseError as exc:
+    #         raise ValueError(str(exc))
 
-    def __int__(self):
-        if self._to_be_stored:
-            return None
+    # def __int__(self):
+    #     if self._to_be_stored:
+    #         return None
 
-        return self._dbnode.id
-
-    @classmethod
-    def query(cls, *args, **kwargs):
-        from aiida.common.exceptions import FeatureNotAvailable
-        raise FeatureNotAvailable("The node query method is not supported in SQLAlchemy. Please use QueryBuilder.")
+    #     return self._dbnode.id
 
     def _get_db_label_field(self):
         """
@@ -185,143 +180,3 @@ class Node(AbstractNode):
     def public(self):
         self._ensure_model_uptodate(attribute_names=['public'])
         return self._dbnode.public
-
-    def _db_store_all(self, with_transaction=True, use_cache=None):
-        """
-        Store the node, together with all input links, if cached, and also the
-        linked nodes, if they were not stored yet.
-
-        :parameter with_transaction: if False, no transaction is used. This
-          is meant to be used ONLY if the outer calling function has already
-          a transaction open!
-        """
-        self._store_input_nodes()
-        self.store(with_transaction=False, use_cache=use_cache)
-        self._store_cached_input_links(with_transaction=False)
-        from aiida.backends.sqlalchemy import get_scoped_session
-        session = get_scoped_session()
-
-        if with_transaction:
-            try:
-                session.commit()
-            except SQLAlchemyError:
-                session.rollback()
-                raise
-
-        return self
-
-    def _store_cached_input_links(self, with_transaction=True):
-        """
-        Store all input links that are in the local cache, transferring them
-        to the DB.
-
-        :note: This can be called only if all parents are already stored.
-
-        :note: Links are stored only after the input nodes are stored. Moreover,
-            link storage is done in a transaction, and if one of the links
-            cannot be stored, an exception is raised and *all* links will remain
-            in the cache.
-
-        :note: This function can be called only after the node is stored.
-           After that, it can be called multiple times, and nothing will be
-           executed if no links are still in the cache.
-
-        :parameter with_transaction: if False, no transaction is used. This
-          is meant to be used ONLY if the outer calling function has already
-          a transaction open!
-        """
-        if not self.is_stored:
-            raise ModificationNotAllowed('cannot store cached incoming links for unstored Node<{}>'.format(self.pk))
-
-        # This raises if there is an unstored node.
-        self._check_are_parents_stored()
-
-        # I have to store only those links where the source is already stored
-        for link_triple in self._incoming_cache:
-            self._add_dblink_from(*link_triple)
-
-        # If everything went smoothly, clear the entries from the cache.
-        # I do it here because I delete them all at once if no error
-        # occurred; otherwise, links will not be stored and I
-        # should not delete them from the cache (but then an exception
-        # would have been raised, and the following lines are not executed)
-        self._incoming_cache = list()
-
-        from aiida.backends.sqlalchemy import get_scoped_session
-        session = get_scoped_session()
-
-        if with_transaction:
-            try:
-                session.commit()
-            except SQLAlchemyError:
-                session.rollback()
-                raise
-
-    def _db_store(self, with_transaction=True):
-        """
-        Store a new node in the DB, also saving its repository directory
-        and attributes.
-
-        After being called attributes cannot be
-        changed anymore! Instead, extras can be changed only AFTER calling
-        this store() function.
-
-        :note: After successful storage, those links that are in the cache, and
-            for which also the parent node is already stored, will be
-            automatically stored. The others will remain unstored.
-
-        :parameter with_transaction: if False, no transaction is used. This
-          is meant to be used ONLY if the outer calling function has already
-          a transaction open!
-
-        :param bool use_cache: Whether I attempt to find an equal node in the DB.
-        """
-        from aiida.backends.sqlalchemy import get_scoped_session
-        session = get_scoped_session()
-
-        # I save the corresponding django entry
-        # I set the folder
-        # NOTE: I first store the files, then only if this is successful,
-        # I store the DB entry. In this way,
-        # I assume that if a node exists in the DB, its folder is in place.
-        # On the other hand, periodically the user might need to run some
-        # bookkeeping utility to check for lone folders.
-        self._repository_folder.replace_with_folder(self._get_temp_folder().abspath, move=True, overwrite=True)
-
-        try:
-            session.add(self._dbnode)
-            # Save its attributes 'manually' without incrementing
-            # the version for each add.
-            self._dbnode.attributes = self._attrs_cache
-            flag_modified(self._dbnode, "attributes")
-            # This should not be used anymore: I delete it to
-            # possibly free memory
-            del self._attrs_cache
-
-            self._temp_folder = None
-            self._to_be_stored = False
-
-            # Here, I store those links that were in the cache and
-            # that are between stored nodes.
-            self._store_cached_input_links(with_transaction=False)
-
-            if with_transaction:
-                try:
-                    # aiida.backends.sqlalchemy.get_scoped_session().commit()
-                    session.commit()
-                except SQLAlchemyError:
-                    # print "Cannot store the node. Original exception: {" \
-                    #      "}".format(e)
-                    session.rollback()
-                    raise
-
-        # This is one of the few cases where it is ok to do a 'global'
-        # except, also because I am re-raising the exception
-        except:
-            # I put back the files in the sandbox folder since the
-            # transaction did not succeed
-            self._get_temp_folder().replace_with_folder(self._repository_folder.abspath, move=True, overwrite=True)
-            raise
-
-        self._dbnode.set_extra(_HASH_EXTRA_KEY, self.get_hash())
-        return self
