@@ -13,8 +13,13 @@ from __future__ import absolute_import
 
 import six
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from aiida.backends.sqlalchemy.models import node as models
+from aiida.backends.sqlalchemy.models import link as link_models
 from aiida.backends.sqlalchemy import get_scoped_session
+from aiida.common import exceptions
+from aiida.common.links import LinkType
 
 from .. import BackendNode, BackendNodeCollection
 from . import entities
@@ -25,8 +30,7 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
     """SQLA Node backend entity"""
 
     MODEL_CLASS = models.DbNode
-    EXTRA_CLASS = models.DbExtra
-
+    LINK_CLASS = link_models.DbLink
 
     # TODO: check how many parameters we want to expose in the init
     # and if we need to define here some defaults
@@ -69,7 +73,7 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
 
     def _attributes(self):
         """
-        Return the attributes, ensuring first that the model 
+        Return the attributes, ensuring first that the model
         is up to date.
         """
         self._ensure_model_uptodate(['attributes'])
@@ -77,7 +81,7 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
 
     def _extras(self):
         """
-        Return the extras, ensuring first that the model 
+        Return the extras, ensuring first that the model
         is up to date.
         """
         self._ensure_model_uptodate(['extras'])
@@ -100,7 +104,7 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
 
         Note: It is independent of the _get_db_attrs_items
         because it is typically faster to retrieve only the keys
-        from the database, especially if the values are big.    
+        from the database, especially if the values are big.
 
         :return: a generator of the keys
         """
@@ -154,7 +158,7 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         Get the UUID of the log entry
         """
         return six.text_type(self._dbmodel.uuid)
-    
+
     def process_type(self):
         """
         The node process_type
@@ -294,7 +298,7 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         :param key: key name
         :return: the key value
         :raise AttributeError: if the key does not exist
-        """ 
+        """
         try:
             return utils.get_attr(self._extras(), key)
         except (KeyError, AttributeError):
@@ -327,6 +331,87 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
 
         return iter(extras.items())
 
+    def _add_db_link_from(self, src, link_type, label):
+        """
+        Add a link to the current node from the 'src' node.
+        Both nodes must be a Node instance (or a subclass of Node)
+
+        :note: this function should not be called directly; it acts directly on
+            the database.
+
+        :param src: the source object
+        :param str label: the name of the label to set the link from src.
+        """
+        from aiida.orm.querybuilder import QueryBuilder
+        from aiida.orm.nodes import Node
+
+        session = get_scoped_session()
+        utils.type_check(src, Node)
+        if self.uuid == src.uuid:
+            raise ValueError("Cannot link to itself")
+
+        if not self.is_stored:
+            raise exceptions.ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
+                                         "destination node is not stored")
+        if not src.is_stored:
+            raise exceptions.ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
+                                         "source node is not stored")
+
+        # Check for cycles. This works if the transitive closure is enabled; if
+        # it isn't, this test will never fail, but then having a circular link
+        # is not meaningful but does not pose a huge threat
+        #
+        # I am linking src->self; a loop would be created if a DbPath exists
+        # already in the TC table from self to src
+        if link_type is LinkType.CREATE or link_type is LinkType.INPUT_CALC or link_type is LinkType.INPUT_WORK:
+            if QueryBuilder().append(
+                    Node, filters={
+                        'id': self.pk
+                    }, tag='parent').append(
+                        Node, filters={
+                            'id': src.pk
+                        }, tag='child', with_ancestors='parent').count() > 0:
+                raise ValueError("The link you are attempting to create would generate a loop")
+
+        self._do_create_link(src, label, link_type)
+        session.commit()
+
+    def _do_create_link(self, src, label, link_type):
+        """
+        Create a link from a source node with label and a link type
+
+        :param src: The source node
+        :type src: :class:`~aiida.orm.implementation.sqlalchemy.node.Node`
+        :param label: The link label
+        :param link_type: The link type
+        """
+        session = get_scoped_session()
+        try:
+            with session.begin_nested():
+                link = self.LINK_CLASS(input_id=src.id, output_id=self.id, label=label, type=link_type.value)
+                session.add(link)
+        except SQLAlchemyError as exc:
+            raise exceptions.UniquenessError(
+                "There is already a link with the same name (raw message was {})".format(exc))
+
+    # region Deprecated
+    def _get_db_input_links(self, link_type):
+        from aiida.orm.convert import get_orm_entity
+
+        link_filter = {'output': self._dbnode}
+        if link_type is not None:
+            link_filter['type'] = link_type.value
+        return [(i.label, get_orm_entity(i.input)) for i in self.LINK_CLASS.query.filter_by(**link_filter).distinct().all()]
+
+    def _get_db_output_links(self, link_type):
+        from aiida.orm.convert import get_orm_entity
+
+        link_filter = {'input': self._dbnode}
+        if link_type is not None:
+            link_filter['type'] = link_type.value
+        return ((i.label, get_orm_entity(i.output)) for i in self.LINK_CLASS.query.filter_by(**link_filter).distinct().all())
+
+    # endregion
 
 class SqlaNodeCollection(BackendNodeCollection):
     """The SQLA collection for nodes"""

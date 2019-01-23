@@ -18,6 +18,7 @@ from aiida.backends.utils import validate_attribute_key
 from aiida.common import exceptions
 from aiida.orm.utils.node import clean_value
 from aiida.common.folders import RepositoryFolder, SandboxFolder
+from aiida.common.lang import type_check
 
 from . import backends
 
@@ -619,6 +620,7 @@ class BackendNode(backends.BackendEntity):
 
     # region Links
 
+    @property
     def has_cached_links(self):
         """
         Return whether there are unstored incoming links in the cache.
@@ -627,53 +629,192 @@ class BackendNode(backends.BackendEntity):
         """
         return bool(self._incoming_cache)
 
-    @abc.abstractmethod
-    def get_input_links(self, link_type):
+    def add_incoming(self, source, link_type, link_label):
         """
-        Get the inputs linked by the given link type
+        Add a link of the given type from a given node to ourself.
 
-        :param link_type: the input links type
-        :return: a list of input backend entities
-        """
-
-    @abc.abstractmethod
-    def get_output_links(self, link_type):
-        """
-        Get the outputs linked by the given link type
-
-        :param link_type: the output links type
-        :return: a list of output backend entities
-        """
-
-    @abc.abstractmethod
-    def add_link_from(self, src, link_type, label):
-        """
-        Add an incoming link from a given source node
-
-        :param src: the source node
-        :type src: :class:`aiida.orm.implementation.Node`
+        :param source: the node from which the link is coming
         :param link_type: the link type
-        :param label: the link label
+        :param link_label: the link label
+        :return: True if the proposed link is allowed, False otherwise
+        :raise TypeError: if `source` is not a Node instance or `link_type` is not a `LinkType` enum
+        :raise ValueError: if the proposed link is invalid
         """
+        self.validate_incoming(source, link_type, link_label)
+        source.validate_outgoing(self, link_type, link_label)
 
-    @abc.abstractmethod
-    def remove_link_from(self, label):
+        if self.is_stored and source.is_stored:
+            self._add_db_link_from(source, link_type, link_label)
+        else:
+            self._add_cachelink_from(source, link_type, link_label)
+
+    def validate_incoming(self, source, link_type, link_label):
         """
-        Remove an incoming link with the given label
+        Validate adding a link of the given type from a given node to ourself.
 
-        :param label: the label of the link to remove
-        """
+        This function will first validate the types of the inputs, followed by the node and link types and validate
+        whether in principle a link of that type between the nodes of these types is allowed.the
 
-    @abc.abstractmethod
-    def replace_link_from(self, src, link_type, label):
-        """
-        Replace an existing link
+        Subsequently, the validity of the "degree" of the proposed link is validated, which means validating the
+        number of links of the given type from the given node type is allowed.
 
-        :param src: the source node
-        :type src: :class:`aiida.orm.implementation.Node`
+        :param source: the node from which the link is coming
         :param link_type: the link type
-        :param label: the link label
+        :param link_label: the link label
+        :raise TypeError: if `source` is not a Node instance or `link_type` is not a `LinkType` enum
+        :raise ValueError: if the proposed link is invalid
         """
+        type_check(link_type, LinkType, 'the link_type should be a value from the LinkType enum')
+        type_check(source, Node, 'the source should be a Node instance')
+
+        from aiida.orm.utils.links import validate_link
+        validate_link(source, self, link_type, link_label)
+
+
+    def validate_outgoing(self, target, link_type, link_label):  # pylint: disable=unused-argument
+        """
+        Validate adding a link of the given type from ourself to a given node.
+
+        The validity of the triple (source, link, target) should be validated in the `validate_incoming` call.
+        This method will be called afterwards and can be overriden by subclasses to add additional checks that are
+        specific to that subclass.
+
+        :param target: the node to which the link is going
+        :param link_type: the link type
+        :param link_label: the link label
+        :raise TypeError: if `target` is not a Node instance or `link_type` is not a `LinkType` enum
+        :raise ValueError: if the proposed link is invalid
+        """
+        type_check(link_type, LinkType, 'the link_type should be a value from the LinkType enum')
+        type_check(target, Node, 'the target should be a Node instance')
+
+    def _add_cachelink_from(self, source, link_type, link_label):
+        """Add an incoming link to the cache.
+
+        .. note: the proposed link is not validated in this function, so this should not be called directly
+            but it should only be called by `Node.add_incoming`.
+
+        :param source: the node from which the link is coming
+        :param link_type: the link type
+        :param link_label: the link label
+        """
+        link_triple = links.LinkTriple(source, link_type, link_label)
+
+        if link_triple in self._incoming_cache:
+            raise exceptions.UniquenessError('the link triple {} is already present in the cache'.format(link_triple))
+
+        self._incoming_cache.append(link_triple)
+
+    def get_stored_link_triples(self, node_class=None, link_type=(), link_label_filter=None, link_direction='incoming'):
+        """
+        Return the list of stored link triples directly incoming to or outgoing of this node.
+
+        Note this will only return link triples that are stored in the database. Anything in the cache is ignored.
+
+        :param node_class: If specified, should be a class, and it filters only elements of that (subclass of) type
+        :param link_type: Only get inputs of this link type, if empty tuple then returns all inputs of all link types.
+        :param link_label_filter: filters the incoming nodes by its link label. This should be a regex statement as
+            one would pass directly to a QuerBuilder filter statement with the 'like' operation.
+        :param link_direction: `incoming` or `outgoing` to get the incoming or outgoing links, respectively.
+        """
+        if not isinstance(link_type, tuple):
+            link_type = (link_type,)
+
+        if link_type and not all([isinstance(t, LinkType) for t in link_type]):
+            raise TypeError('link_type should be a LinkType or tuple of LinkType: got {}'.format(link_type))
+
+        node_class = node_class or Node
+        node_filters = {'id': {'==': self.id}}
+        edge_filters = {}
+
+        if link_type:
+            edge_filters['type'] = {'in': [t.value for t in link_type]}
+
+        if link_label_filter:
+            edge_filters['label'] = {'like': link_label_filter}
+
+        builder = querybuilder.QueryBuilder()
+        builder.append(Node, filters=node_filters, tag='main')
+
+        if link_direction == 'outgoing':
+            builder.append(
+                node_class,
+                with_incoming='main',
+                project=['*'],
+                edge_project=['type', 'label'],
+                edge_filters=edge_filters)
+        else:
+            builder.append(
+                node_class,
+                with_outgoing='main',
+                project=['*'],
+                edge_project=['type', 'label'],
+                edge_filters=edge_filters)
+
+        return [links.LinkTriple(entry[0], LinkType(entry[1]), entry[2]) for entry in builder.all()]
+
+     def get_incoming(self, node_class=None, link_type=(), link_label_filter=None):
+        """
+        Return a list of link triples that are (directly) incoming into this node.
+
+        :param node_class: If specified, should be a class or tuple of classes, and it filters only
+            elements of that specific type (or a subclass of 'type')
+        :param link_type: If specified should be a string or tuple to get the inputs of this
+            link type, if None then returns all inputs of all link types.
+        :param link_label_filter: filters the incoming nodes by its link label.
+            Here wildcards (% and _) can be passed in link label filter as we are using "like" in QB.
+        """
+        if not isinstance(link_type, tuple):
+            link_type = (link_type,)
+
+        if self.is_stored:
+            link_triples = self.get_stored_link_triples(node_class, link_type, link_label_filter, 'incoming')
+        else:
+            link_triples = []
+
+        # Get all cached link triples
+        for link_triple in self._incoming_cache:
+
+            if link_triple in link_triples:
+                raise exceptions.InternalError('Node<{}> has both a stored and cached link triple {}'.format(
+                    self.pk, link_triple))
+
+            if not link_type or link_triple.link_type in link_type:
+                if link_label_filter is not None:
+                    if sql_string_match(string=link_triple.link_label, pattern=link_label_filter):
+                        link_triples.append(link_triple)
+                else:
+                    link_triples.append(link_triple)
+
+        return links.LinkManager(link_triples)
+
+    def get_outgoing(self, node_class=None, link_type=(), link_label_filter=None):
+        """
+        Return a list of link triples that are (directly) outgoing of this node.
+
+        :param node_class: If specified, should be a class or tuple of classes, and it filters only
+            elements of that specific type (or a subclass of 'type')
+        :param link_type: If specified should be a string or tuple to get the inputs of this
+            link type, if None then returns all outputs of all link types.
+        :param link_label_filter: filters the outgoing nodes by its link label.
+            Here wildcards (% and _) can be passed in link label filter as we are using "like" in QB.
+        """
+        link_triples = self.get_stored_link_triples(node_class, link_type, link_label_filter, 'outgoing')
+        return links.LinkManager(link_triples)
+
+    @abc.abstractmethod
+    def _add_db_link_from(self, src, link_type, label):
+        """
+        Add a link to the current node from the 'src' node.
+        Both nodes must be a Node instance (or a subclass of Node)
+
+        :note: this function should not be called directly; it acts directly on
+            the database.
+
+        :param src: the source object
+        :param str label: the name of the label to set the link from src.
+        """
+
 
     # endregion
 
@@ -749,6 +890,33 @@ class BackendNode(backends.BackendEntity):
         if getattr(self, '_temp_folder', None) is not None:
             self._temp_folder.erase()
 
+    # endregion
+
+    # region Deprecated
+    ## While we're striving to avoid duplication of deprecated
+    ## methods, in this specific case it is simple to just keep
+    ## these functions here (as the logic is backend-specific)
+    @abc.abstractmethod
+    def _get_db_output_links(self, link_type):
+        """
+        Return a list of tuples (label, aiida_class) for each output link,
+        possibly filtering only by those of a given type.
+
+        :param link_type: if not None, a link type to filter results
+        :return:  a list of tuples (label, aiida_class)
+        """
+        pass
+
+    @abc.abstractclassmethod
+    def _get_db_input_links(self, link_type):
+        """
+        Return a list of tuples (label, aiida_class) for each input link,
+        possibly filtering only by those of a given type.
+
+        :param link_type: if not None, a link type to filter results
+        :return:  a list of tuples (label, aiida_class)
+        """
+        pass
     # endregion
 
 

@@ -144,11 +144,6 @@ class Node(AbstractNode):
         from aiida.common.exceptions import FeatureNotAvailable
         raise FeatureNotAvailable("The node query method is not supported in SQLAlchemy. Please use QueryBuilder.")
 
-
-
-    
-
-   
     def _get_db_label_field(self):
         """
         Get the label of the node.
@@ -185,76 +180,6 @@ class Node(AbstractNode):
         if self.is_stored:
             session.add(self._dbnode)
             self._increment_version_number_db()
-
-    def _add_dblink_from(self, src, link_type, label):
-        from aiida.backends.sqlalchemy import get_scoped_session
-        from aiida.orm.querybuilder import QueryBuilder
-        session = get_scoped_session()
-        type_check(src, Node)
-        if self.uuid == src.uuid:
-            raise ValueError("Cannot link to itself")
-
-        if not self.is_stored:
-            raise ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
-                                         "destination node is not stored")
-        if not src.is_stored:
-            raise ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
-                                         "source node is not stored")
-
-        # Check for cycles. This works if the transitive closure is enabled; if
-        # it isn't, this test will never fail, but then having a circular link
-        # is not meaningful but does not pose a huge threat
-        #
-        # I am linking src->self; a loop would be created if a DbPath exists
-        # already in the TC table from self to src
-        if link_type is LinkType.CREATE or link_type is LinkType.INPUT_CALC or link_type is LinkType.INPUT_WORK:
-            if QueryBuilder().append(
-                    Node, filters={
-                        'id': self.pk
-                    }, tag='parent').append(
-                        Node, filters={
-                            'id': src.pk
-                        }, tag='child', with_ancestors='parent').count() > 0:
-                raise ValueError("The link you are attempting to create would generate a loop")
-
-        self._do_create_link(src, label, link_type)
-        session.commit()
-
-    def _do_create_link(self, src, label, link_type):
-        """
-        Create a link from a source node with label and a link type
-
-        :param src: The source node
-        :type src: :class:`~aiida.orm.implementation.sqlalchemy.node.Node`
-        :param label: The link label
-        :param link_type: The link type
-        """
-        from aiida.backends.sqlalchemy import get_scoped_session
-        session = get_scoped_session()
-        try:
-            with session.begin_nested():
-                link = DbLink(input_id=src.id, output_id=self.id, label=label, type=link_type.value)
-                session.add(link)
-        except SQLAlchemyError as exc:
-            raise UniquenessError("There is already a link with the same name (raw message was {})" "".format(exc))
-
-    def _get_db_input_links(self, link_type):
-        from aiida.orm.convert import get_orm_entity
-
-        link_filter = {'output': self._dbnode}
-        if link_type is not None:
-            link_filter['type'] = link_type.value
-        return [(i.label, get_orm_entity(i.input)) for i in DbLink.query.filter_by(**link_filter).distinct().all()]
-
-    def _get_db_output_links(self, link_type):
-        from aiida.orm.convert import get_orm_entity
-
-        link_filter = {'input': self._dbnode}
-        if link_type is not None:
-            link_filter['type'] = link_type.value
-        return ((i.label, get_orm_entity(i.output)) for i in DbLink.query.filter_by(**link_filter).distinct().all())
-
-    
 
     @property
     def public(self):

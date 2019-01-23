@@ -51,26 +51,6 @@ class Node(AbstractNode):
             raise NotExistent("pk= {} is not an instance of {}".format(pk, cls.__name__))
         return node
 
-    @classmethod
-    def query(cls, *args, **kwargs):
-        from aiida.backends.djsite.db.models import DbNode
-        if cls._plugin_type_string:
-            if not cls._plugin_type_string.endswith('.'):
-                raise InternalError("The plugin type string does not " "finish with a dot??")
-
-            # If it is 'calculation.Calculation.', we want to filter
-            # for things that start with 'calculation.' and so on
-            plug_type = cls._plugin_type_string
-
-            # Remove the implementation.django or sqla part.
-            if plug_type.startswith('implementation.'):
-                plug_type = '.'.join(plug_type.split('.')[2:])
-            pre, sep, _ = plug_type[:-1].rpartition('.')
-            superclass_string = "".join([pre, sep])
-            return DbNode.aiidaobjects.filter(*args, type__startswith=superclass_string, **kwargs)
-        else:
-            # Base Node class, with empty string
-            return DbNode.aiidaobjects.filter(*args, **kwargs)
 
     def __init__(self, **kwargs):
         from aiida.backends.djsite.db.models import DbNode
@@ -175,72 +155,6 @@ class Node(AbstractNode):
             with transaction.atomic():
                 self._dbnode.save()
                 self._increment_version_number_db()
-
-    def _add_dblink_from(self, src, link_type, label):
-        from aiida.orm.querybuilder import QueryBuilder
-        if not isinstance(src, Node):
-            raise ValueError("src must be a Node instance")
-        if self.uuid == src.uuid:
-            raise ValueError("Cannot link to itself")
-
-        if not src.is_stored:
-            raise ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
-                                         "source node is not stored")
-
-        if not self.is_stored:
-            raise ModificationNotAllowed("Cannot call the internal _add_dblink_from if the "
-                                         "destination node is not stored")
-
-        if link_type is LinkType.CREATE or link_type is LinkType.INPUT_CALC or link_type is LinkType.INPUT_WORK:
-            # Check for cycles. This works if the transitive closure is enabled; if it
-            # isn't, this test will never fail, but then having a circular link is not
-            # meaningful but does not pose a huge threat
-            #
-            # I am linking src->self; a loop would be created if a DbPath exists already
-            # in the TC table from self to src
-            if QueryBuilder().append(
-                    Node, filters={
-                        'id': self.pk
-                    }, tag='parent').append(
-                        Node, filters={
-                            'id': src.pk
-                        }, tag='child', with_ancestors='parent').count() > 0:
-                raise ValueError("The link you are attempting to create would generate a loop")
-
-        self._do_create_link(src, label, link_type)
-
-    def _do_create_link(self, src, label, link_type):
-        from aiida.backends.djsite.db.models import DbLink
-
-        sid = None
-        try:
-            # transactions are needed here for Postgresql:
-            # https://docs.djangoproject.com/en/1.5/topics/db/transactions/#handling-exceptions-within-postgresql-transactions
-            sid = transaction.savepoint()
-            DbLink.objects.create(input=src._dbnode, output=self._dbnode, label=label, type=link_type.value)
-            transaction.savepoint_commit(sid)
-        except IntegrityError as exc:
-            transaction.savepoint_rollback(sid)
-            raise UniquenessError("There is already a link with the same " "name (raw message was {})" "".format(exc))
-
-    def _get_db_input_links(self, link_type):
-        from aiida.orm.convert import get_orm_entity
-        from aiida.backends.djsite.db.models import DbLink
-
-        link_filter = {'output': self._dbnode}
-        if link_type is not None:
-            link_filter['type'] = link_type.value
-        return [(i.label, get_orm_entity(i.input)) for i in DbLink.objects.filter(**link_filter).distinct()]
-
-    def _get_db_output_links(self, link_type):
-        from aiida.orm.convert import get_orm_entity
-        from aiida.backends.djsite.db.models import DbLink
-
-        link_filter = {'input': self._dbnode}
-        if link_type is not None:
-            link_filter['type'] = link_type.value
-        return ((i.label, get_orm_entity(i.output)) for i in DbLink.objects.filter(**link_filter).distinct())
-
 
 
     def _db_store_all(self, with_transaction=True, use_cache=None):

@@ -284,17 +284,6 @@ class Node(entities.Entity):
         """
         return {}
 
-    @classmethod
-    def query(cls, *_args, **_kwargs):
-        """
-        Query for nodes of this type
-
-        .. deprecated:: 1.0.0b1
-            Use :meth:`aiida.orm.Node.objects.query` instead.
-        """
-        warnings.warn("use aidia.orm.Node.objects.query instead", DeprecationWarning)
-        raise NotImplementedError("This method is no longer available, use Node.objects.query()")
-
     def _set_with_defaults(self, **kwargs):
         """
         Calls the set() method, but also adds the class-defined default
@@ -445,306 +434,6 @@ class Node(entities.Entity):
         """
         return users.User.from_backend_entity(self.backend_entity.get_user())
 
-    def validate_incoming(self, source, link_type, link_label):
-        """
-        Validate adding a link of the given type from a given node to ourself.
-
-        This function will first validate the types of the inputs, followed by the node and link types and validate
-        whether in principle a link of that type between the nodes of these types is allowed.the
-
-        Subsequently, the validity of the "degree" of the proposed link is validated, which means validating the
-        number of links of the given type from the given node type is allowed.
-
-        :param source: the node from which the link is coming
-        :param link_type: the link type
-        :param link_label: the link label
-        :raise TypeError: if `source` is not a Node instance or `link_type` is not a `LinkType` enum
-        :raise ValueError: if the proposed link is invalid
-        """
-        type_check(link_type, LinkType)
-        type_check(source, Node)
-
-        from aiida.orm.utils.links import validate_link
-        validate_link(source, self, link_type, link_label)
-
-    def validate_outgoing(self, target, link_type, link_label):  # pylint: disable=unused-argument
-        """
-        Validate adding a link of the given type from ourself to a given node.
-
-        The validity of the triple (source, link, target) should be validated in the `validate_incoming` call.
-        This method will be called afterwards and can be overriden by subclasses to add additional checks that are
-        specific to that subclass.
-
-        :param target: the node to which the link is going
-        :param link_type: the link type
-        :param link_label: the link label
-        :raise TypeError: if `target` is not a Node instance or `link_type` is not a `LinkType` enum
-        :raise ValueError: if the proposed link is invalid
-        """
-        type_check(link_type, LinkType)
-        type_check(target, Node)
-
-    def add_incoming(self, source, link_type, link_label):
-        """
-        Add a link of the given type from a given node to ourself.
-
-        :param source: the node from which the link is coming
-        :param link_type: the link type
-        :param link_label: the link label
-        :return: True if the proposed link is allowed, False otherwise
-        :raise TypeError: if `source` is not a Node instance or `link_type` is not a `LinkType` enum
-        :raise ValueError: if the proposed link is invalid
-        """
-        self.validate_incoming(source, link_type, link_label)
-        source.validate_outgoing(self, link_type, link_label)
-
-        if self.is_stored and source.is_stored:
-            self.backend_entity.add_link_from(source, link_type, link_label)
-        else:
-            self._add_cachelink_from(source, link_type, link_label)
-
-    def _add_cachelink_from(self, source, link_type, link_label):
-        """Add an incoming link to the cache.
-
-        .. note: the proposed link is not validated in this function, so this should not be called directly
-            but it should only be called by `Node.add_incoming`.
-
-        :param source: the node from which the link is coming
-        :param link_type: the link type
-        :param link_label: the link label
-        """
-        link_triple = links.LinkTriple(source, link_type, link_label)
-
-        if link_triple in self._incoming_cache:
-            raise exceptions.UniquenessError('the link triple {} is already present in the cache'.format(link_triple))
-
-        self._incoming_cache.append(link_triple)
-
-    def get_incoming(self, node_class=None, link_type=(), link_label_filter=None):
-        """
-        Return a list of link triples that are (directly) incoming into this node.
-
-        :param node_class: If specified, should be a class or tuple of classes, and it filters only
-            elements of that specific type (or a subclass of 'type')
-        :param link_type: If specified should be a string or tuple to get the inputs of this
-            link type, if None then returns all inputs of all link types.
-        :param link_label_filter: filters the incoming nodes by its link label.
-            Here wildcards (% and _) can be passed in link label filter as we are using "like" in QB.
-        """
-        if not isinstance(link_type, tuple):
-            link_type = (link_type,)
-
-        if self.is_stored:
-            link_triples = self.get_stored_link_triples(node_class, link_type, link_label_filter, 'incoming')
-        else:
-            link_triples = []
-
-        # Get all cached link triples
-        for link_triple in self._incoming_cache:
-
-            if link_triple in link_triples:
-                raise exceptions.InternalError('Node<{}> has both a stored and cached link triple {}'.format(
-                    self.pk, link_triple))
-
-            if not link_type or link_triple.link_type in link_type:
-                if link_label_filter is not None:
-                    if sql_string_match(string=link_triple.link_label, pattern=link_label_filter):
-                        link_triples.append(link_triple)
-                else:
-                    link_triples.append(link_triple)
-
-        return links.LinkManager(link_triples)
-
-    def get_outgoing(self, node_class=None, link_type=(), link_label_filter=None):
-        """
-        Return a list of link triples that are (directly) outgoing of this node.
-
-        :param node_class: If specified, should be a class or tuple of classes, and it filters only
-            elements of that specific type (or a subclass of 'type')
-        :param link_type: If specified should be a string or tuple to get the inputs of this
-            link type, if None then returns all outputs of all link types.
-        :param link_label_filter: filters the outgoing nodes by its link label.
-            Here wildcards (% and _) can be passed in link label filter as we are using "like" in QB.
-        """
-        link_triples = self.get_stored_link_triples(node_class, link_type, link_label_filter, 'outgoing')
-        return links.LinkManager(link_triples)
-
-    def get_stored_link_triples(self, node_class=None, link_type=(), link_label_filter=None, link_direction='incoming'):
-        """
-        Return the list of stored link triples directly incoming to or outgoing of this node.
-
-        Note this will only return link triples that are stored in the database. Anything in the cache is ignored.
-
-        :param node_class: If specified, should be a class, and it filters only elements of that (subclass of) type
-        :param link_type: Only get inputs of this link type, if empty tuple then returns all inputs of all link types.
-        :param link_label_filter: filters the incoming nodes by its link label. This should be a regex statement as
-            one would pass directly to a QuerBuilder filter statement with the 'like' operation.
-        :param link_direction: `incoming` or `outgoing` to get the incoming or outgoing links, respectively.
-        """
-        if not isinstance(link_type, tuple):
-            link_type = (link_type,)
-
-        if link_type and not all([isinstance(t, LinkType) for t in link_type]):
-            raise TypeError('link_type should be a LinkType or tuple of LinkType: got {}'.format(link_type))
-
-        node_class = node_class or Node
-        node_filters = {'id': {'==': self.id}}
-        edge_filters = {}
-
-        if link_type:
-            edge_filters['type'] = {'in': [t.value for t in link_type]}
-
-        if link_label_filter:
-            edge_filters['label'] = {'like': link_label_filter}
-
-        builder = querybuilder.QueryBuilder()
-        builder.append(Node, filters=node_filters, tag='main')
-
-        if link_direction == 'outgoing':
-            builder.append(
-                node_class,
-                with_incoming='main',
-                project=['*'],
-                edge_project=['type', 'label'],
-                edge_filters=edge_filters)
-        else:
-            builder.append(
-                node_class,
-                with_outgoing='main',
-                project=['*'],
-                edge_project=['type', 'label'],
-                edge_filters=edge_filters)
-
-        return [links.LinkTriple(entry[0], LinkType(entry[1]), entry[2]) for entry in builder.all()]
-
-    def get_inputs_dict(self, only_in_db=False, link_type=None):
-        """
-        Return a dictionary where the key is the label of the input link, and
-        the value is the input node.
-
-        :param only_in_db: If true only get stored links, not cached
-        :param link_type: Only get inputs of this link type, if None then
-                returns all inputs of all link types.
-        :return: a dictionary {label:object}
-        """
-        warnings.warn('get_inputs_dict method is deprecated, use get_incoming instead', DeprecationWarning)
-
-        return dict(self.get_inputs(also_labels=True, only_in_db=only_in_db, link_type=link_type))
-
-    def get_outputs_dict(self, link_type=None):
-        """
-        Return a dictionary where the key is the label of the output link, and
-        the value is the input node.
-        As some Nodes (Datas in particular) can have more than one output with
-        the same label, all keys have the name of the link with appended the pk
-        of the node in output.
-        The key without pk appended corresponds to the oldest node.
-
-        :return: a dictionary {linkname:object}
-        """
-        warnings.warn('get_outputs_dict method is deprecated, use get_outgoing instead', DeprecationWarning)
-
-        if link_type is not None and not isinstance(link_type, LinkType):
-            raise TypeError("link_type should be a LinkType object")
-
-        all_outputs = self.get_outputs(also_labels=True, link_type=link_type)
-
-        all_linknames = [i[0] for i in all_outputs]
-        linknames_set = list(set(all_linknames))
-
-        # prepare a new output list
-        new_outputs = {}
-        # first add the defaults
-        for irreducible_linkname in linknames_set:
-            this_elements = [i[1] for i in all_outputs if i[0] == irreducible_linkname]
-            # select the oldest element
-            last_element = sorted(this_elements, key=lambda x: x.ctime)[0]
-            # for this one add the default value
-            new_outputs[irreducible_linkname] = last_element
-
-            # now for everyone append the string with the pk
-            for i in this_elements:
-                new_outputs[irreducible_linkname + "_{}".format(i.pk)] = i
-
-        return new_outputs
-
-    def get_inputs(self, node_type=None, also_labels=False, only_in_db=False, link_type=None):
-        """
-        Return a list of nodes that enter (directly) in this node
-
-        :param node_type: If specified, should be a class, and it filters only
-            elements of that specific type (or a subclass of 'type')
-        :param also_labels: If False (default) only return a list of input nodes.
-            If True, return a list of tuples, where each tuple has the
-            following format: ('label', Node), with 'label' the link label,
-            and Node a Node instance or subclass
-        :param only_in_db: Return only the inputs that are in the database,
-            ignoring those that are in the local cache. Otherwise, return
-            all links.
-        :param link_type: Only get inputs of this link type, if None then
-            returns all inputs of all link types.
-        """
-        warnings.warn('get_inputs method is deprecated, use get_incoming instead', DeprecationWarning)
-
-        if link_type is not None and not isinstance(link_type, LinkType):
-            raise TypeError('link_type should be a LinkType object')
-
-        inputs_list = self._backend_entity._get_db_input_links(link_type=link_type)
-
-        if not only_in_db:
-            # Needed for the check
-            input_list_keys = [i[0] for i in inputs_list]
-
-            for link_triple in self._incoming_cache:
-                if link_triple.link_label in input_list_keys:
-                    raise exceptions.InternalError(
-                        "There exist a link with the same name '{}' both in the DB and in the internal "
-                        "cache for node pk= {}!".format(link_triple.link_label, self.pk))
-
-                if link_type is None or link_triple.link_type is link_type:
-                    inputs_list.append((link_triple.link_label, link_triple.node))
-
-        if node_type is None:
-            filtered_list = inputs_list
-        else:
-            filtered_list = [i for i in inputs_list if isinstance(i[1], node_type)]
-
-        if also_labels:
-            return list(filtered_list)
-
-        return [i[1] for i in filtered_list]
-
-    def get_outputs(self, node_type=None, also_labels=False, link_type=None):
-        """
-        Return a list of nodes that exit (directly) from this node
-
-        :param node_type: if specified, should be a class, and it filters only
-            elements of that specific node_type (or a subclass of 'node_type')
-        :param also_labels: if False (default) only return a list of input nodes.
-            If True, return a list of tuples, where each tuple has the
-            following format: ('label', Node), with 'label' the link label,
-            and Node a Node instance or subclass
-        :param link_type: Only return outputs connected by links of this type.
-        """
-        warnings.warn('get_outputs method is deprecated, use get_outgoing instead', DeprecationWarning)
-
-        if link_type is not None and not isinstance(link_type, LinkType):
-            raise TypeError('link_type should be a LinkType object')
-
-        outputs_list = [
-            convert.get_orm_entity(entity) for entity in self.backend_entity.get_output_links(link_type=link_type)
-        ]
-
-        if node_type is None:
-            filtered_list = outputs_list
-        else:
-            filtered_list = (i for i in outputs_list if isinstance(i[1], node_type))
-
-        if also_labels:
-            return list(filtered_list)
-
-        return [i[1] for i in filtered_list]
-
     def get_computer(self):
         """
         Get the computer associated to the node.
@@ -756,22 +445,9 @@ class Node(entities.Entity):
         """
         self._backend_entity.get_computer()
 
-    
-
     # endregion
 
     # region Attributes
-
-    def iterattrs(self):
-        """
-        Iterator over the Node attributes, returning tuples (key, value)
-
-        .. deprecated:: 1.0.0b1
-        """
-        warnings.warn('iterattrs has been deprecated, use attrs_items() instead', DeprecationWarning)
-
-        for item in self._backend_entity.attrs_items:
-            yield item
 
     @property
     def attrs_items(self):
@@ -781,17 +457,6 @@ class Node(entities.Entity):
         .. deprecated:: 1.0.0b1
         """
         for item in self._backend_entity.attrs_items:
-            yield item
-
-    def attrs(self):
-        """
-        Returns the keys of the attributes as a generator.
-
-        :return: a generator of a strings
-        """
-        warnings.warn('iterattrs has been deprecated, use attrs_keys() instead', DeprecationWarning)
-
-        for item in self._backend_entity.attrs_keys:
             yield item
 
     @property
@@ -903,21 +568,25 @@ class Node(entities.Entity):
         """
         self._backend_entity.del_extra(key)
 
-    def extras(self):
+    @property
+    def extras_items(self):
         """
-        Get the keys of the extras.
+        Iterator over the node extras, returning tuples (key, value)
 
-        :return: a list of strings
+        .. deprecated:: 1.0.0b1
         """
-        self._backend_entity.extras()
+        for item in self._backend_entity.extras_items:
+            yield item
 
-    def iterextras(self):
+    @property
+    def extras_keys(self):
         """
-        Iterator over the extras, returning tuples (key, value)
+        Returns the keys of the nodes extras as a generator.
 
-        :todo: verify that I am not creating a list internally
+        :return: a generator of a strings
         """
-        self._backend_entity.iterextras()
+        for item in self._backend_entity.extras_keys:
+            yield item
 
     # endregion
 
@@ -930,7 +599,6 @@ class Node(entities.Entity):
         :return: the newly created comment
         """
         self._backend_entity.add_comment(content, user)
-
 
     def get_comment(self, identifier):
         """
@@ -1426,12 +1094,12 @@ class Node(entities.Entity):
         Property to understand if children are attached to the node
         :return: a boolean
         """
-        first_desc = querybuilder.QueryBuilder().append(
+        first_descendant = querybuilder.QueryBuilder().append(
             Node, filters={
                 'id': self.pk
             }, tag='self').append(
                 Node, with_ancestors='self', project='id').first()
-        return bool(first_desc)
+        return bool(first_descendant)
 
     @property
     def has_parents(self):
@@ -1446,6 +1114,9 @@ class Node(entities.Entity):
                 Node, with_descendants='self', project='id').first()
         return bool(first_ancestor)
 
+    # TODO: decide if we want to keep it in the frontend and if we want
+    # to keep it with this name (or e.g. have simply .process, and
+    # maybe define it only in the ProcessNode subclass)
     def load_process_class(self):
         """
         For nodes that were ran by a Process, the process_type will be set. This can either be an entry point
@@ -1465,6 +1136,38 @@ class Node(entities.Entity):
             process_class = getattr(module, class_name)
 
         return process_class
+
+    # region Links
+
+    def get_incoming(self, node_class=None, link_type=(), link_label_filter=None):
+        """
+        Return a list of link triples that are (directly) incoming into this node.
+
+        :param node_class: If specified, should be a class or tuple of classes, and it filters only
+            elements of that specific type (or a subclass of 'type')
+        :param link_type: If specified should be a string or tuple to get the inputs of this
+            link type, if None then returns all inputs of all link types.
+        :param link_label_filter: filters the incoming nodes by its link label.
+            Here wildcards (% and _) can be passed in link label filter as we are using "like" in QB.
+        """
+        return self._backend_entity.get_incoming(
+            node_class=node_class, link_type=link_type, link_label_filter=link_label_filter)
+
+    def get_outgoing(self, node_class=None, link_type=(), link_label_filter=None):
+        """
+        Return a list of link triples that are (directly) outgoing of this node.
+
+        :param node_class: If specified, should be a class or tuple of classes, and it filters only
+            elements of that specific type (or a subclass of 'type')
+        :param link_type: If specified should be a string or tuple to get the inputs of this
+            link type, if None then returns all outputs of all link types.
+        :param link_label_filter: filters the outgoing nodes by its link label.
+            Here wildcards (% and _) can be passed in link label filter as we are using "like" in QB.
+        """
+        return self._backend_entity.get_outgoing(
+            node_class=node_class, link_type=link_type, link_label_filter=link_label_filter)
+
+    # endregion
 
 
 #    @classmethod
@@ -1513,6 +1216,8 @@ class Node(entities.Entity):
 #
 #        return self.id
 
+# region DeprecatedMethods
+
     @combomethod
     def querybuild(self_or_cls, **kwargs):  # pylint: disable=no-self-argument
         """
@@ -1545,5 +1250,198 @@ class Node(entities.Entity):
             filters.update({'id': self_or_cls.pk})
             query.append(self_or_cls.__class__, filters=filters, **kwargs)
         return query
+
+    @classmethod
+    def query(cls, *_args, **_kwargs):
+        """
+        Query for nodes of this type
+
+        .. deprecated:: 1.0.0b1
+            Use :meth:`aiida.orm.Node.objects.query` instead.
+        """
+        warnings.warn("use aidia.orm.Node.objects.query instead", DeprecationWarning)
+        raise NotImplementedError("This method is no longer available, use Node.objects.query()")
+
+    def get_inputs_dict(self, only_in_db=False, link_type=None):
+        """
+        Return a dictionary where the key is the label of the input link, and
+        the value is the input node.
+
+        .. deprecated:: 1.0.0b1
+
+        :param only_in_db: If true only get stored links, not cached
+        :param link_type: Only get inputs of this link type, if None then
+                returns all inputs of all link types.
+        :return: a dictionary {label:object}
+        """
+        warnings.warn('get_inputs_dict method is deprecated, use get_incoming instead', DeprecationWarning)
+
+        return dict(self.get_inputs(also_labels=True, only_in_db=only_in_db, link_type=link_type))
+
+    def get_outputs_dict(self, link_type=None):
+        """
+        Return a dictionary where the key is the label of the output link, and
+        the value is the input node.
+        As some Nodes (Datas in particular) can have more than one output with
+        the same label, all keys have the name of the link with appended the pk
+        of the node in output.
+        The key without pk appended corresponds to the oldest node.
+
+        .. deprecated:: 1.0.0b1
+
+        :return: a dictionary {linkname:object}
+        """
+        warnings.warn('get_outputs_dict method is deprecated, use get_outgoing instead', DeprecationWarning)
+
+        if link_type is not None and not isinstance(link_type, LinkType):
+            raise TypeError("link_type should be a LinkType object")
+
+        all_outputs = self.get_outputs(also_labels=True, link_type=link_type)
+
+        all_linknames = [i[0] for i in all_outputs]
+        linknames_set = list(set(all_linknames))
+
+        # prepare a new output list
+        new_outputs = {}
+        # first add the defaults
+        for irreducible_linkname in linknames_set:
+            this_elements = [i[1] for i in all_outputs if i[0] == irreducible_linkname]
+            # select the oldest element
+            last_element = sorted(this_elements, key=lambda x: x.ctime)[0]
+            # for this one add the default value
+            new_outputs[irreducible_linkname] = last_element
+
+            # now for everyone append the string with the pk
+            for i in this_elements:
+                new_outputs[irreducible_linkname + "_{}".format(i.pk)] = i
+
+        return new_outputs
+
+    def get_inputs(self, node_type=None, also_labels=False, only_in_db=False, link_type=None):
+        """
+        Return a list of nodes that enter (directly) in this node
+
+        :param node_type: If specified, should be a class, and it filters only
+            elements of that specific type (or a subclass of 'type')
+        :param also_labels: If False (default) only return a list of input nodes.
+            If True, return a list of tuples, where each tuple has the
+            following format: ('label', Node), with 'label' the link label,
+            and Node a Node instance or subclass
+        :param only_in_db: Return only the inputs that are in the database,
+            ignoring those that are in the local cache. Otherwise, return
+            all links.
+        :param link_type: Only get inputs of this link type, if None then
+            returns all inputs of all link types.
+
+        .. deprecated:: 1.0.0b1
+        """
+        warnings.warn('get_inputs method is deprecated, use get_incoming instead', DeprecationWarning)
+
+        if link_type is not None and not isinstance(link_type, LinkType):
+            raise TypeError('link_type should be a LinkType object')
+
+        inputs_list = self._backend_entity._get_db_input_links(link_type=link_type)
+
+        if not only_in_db:
+            # Needed for the check
+            input_list_keys = [i[0] for i in inputs_list]
+
+            for link_triple in self._incoming_cache:
+                if link_triple.link_label in input_list_keys:
+                    raise exceptions.InternalError(
+                        "There exist a link with the same name '{}' both in the DB and in the internal "
+                        "cache for node pk= {}!".format(link_triple.link_label, self.pk))
+
+                if link_type is None or link_triple.link_type is link_type:
+                    inputs_list.append((link_triple.link_label, link_triple.node))
+
+        if node_type is None:
+            filtered_list = inputs_list
+        else:
+            filtered_list = [i for i in inputs_list if isinstance(i[1], node_type)]
+
+        if also_labels:
+            return list(filtered_list)
+
+        return [i[1] for i in filtered_list]
+
+    def get_outputs(self, node_type=None, also_labels=False, link_type=None):
+        """
+        Return a list of nodes that exit (directly) from this node
+
+        :param node_type: if specified, should be a class, and it filters only
+            elements of that specific node_type (or a subclass of 'node_type')
+        :param also_labels: if False (default) only return a list of input nodes.
+            If True, return a list of tuples, where each tuple has the
+            following format: ('label', Node), with 'label' the link label,
+            and Node a Node instance or subclass
+        :param link_type: Only return outputs connected by links of this type.
+
+        .. deprecated:: 1.0.0b1
+        """
+        warnings.warn('get_outputs method is deprecated, use get_outgoing instead', DeprecationWarning)
+
+        if link_type is not None and not isinstance(link_type, LinkType):
+            raise TypeError('link_type should be a LinkType object')
+
+        outputs_list = [
+            convert.get_orm_entity(entity) for entity in self.backend_entity._get_db_output_links(link_type=link_type)
+        ]
+
+        if node_type is None:
+            filtered_list = outputs_list
+        else:
+            filtered_list = (i for i in outputs_list if isinstance(i[1], node_type))
+
+        if also_labels:
+            return list(filtered_list)
+
+        return [i[1] for i in filtered_list]
+
+    def iterattrs(self):
+        """
+        Iterator over the Node attributes, returning tuples (key, value)
+
+        .. deprecated:: 1.0.0b1
+        """
+        warnings.warn('iterattrs has been deprecated, use attrs_items instead', DeprecationWarning)
+
+        for item in self._backend_entity.attrs_items:
+            yield item
+
+    def attrs(self):
+        """
+        Returns the keys of the attributes as a generator.
+
+        .. deprecated:: 1.0.0b1
+        :return: a generator of a strings
+        """
+        warnings.warn('iterattrs has been deprecated, use attrs_keys instead', DeprecationWarning)
+
+        for item in self._backend_entity.attrs_keys:
+            yield item
+
+    def extras(self):
+        """
+        Get the keys of the extras.
+
+        .. deprecated:: 1.0.0b1
+        :return: a list of strings
+        """
+        warnings.warn('extras has been deprecated, use extras_keys instead', DeprecationWarning)
+
+        for item in self._backend_entity.extras_items:
+            yield item
+
+    def iterextras(self):
+        """
+        Iterator over the extras, returning tuples (key, value)
+
+        .. deprecated:: 1.0.0b1
+        """
+        warnings.warn('iterextras has been deprecated, use extras_items instead', DeprecationWarning)
+
+        for item in self._backend_entity.extras_keys:
+            yield item
 
     # endregion
