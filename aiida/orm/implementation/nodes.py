@@ -290,7 +290,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
                 computer = computer.backend_entity
             self._set_db_computer(computer)
         else:
-            raise ModificationNotAllowed("Node with uuid={} was already stored".format(self.uuid))
+            raise exceptions.ModificationNotAllowed("Node with uuid={} was already stored".format(self.uuid))
 
     @abc.abstractmethod
     def _set_db_computer(self, computer):
@@ -303,7 +303,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         """
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     def get_user(self):
         """
         Get the user.
@@ -313,7 +313,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         """
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     def set_user(self, user):
         """
         Set the user
@@ -369,7 +369,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         """
         self._update_db_label_field()
 
-    @abstractmethod
+    @abc.abstractmethod
     def _get_db_label_field(self):
         """
         Get the label field acting directly on the DB
@@ -378,7 +378,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         """
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     def _update_db_label_field(self, field_value):
         """
         Set the label field acting directly on the DB
@@ -406,14 +406,14 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         """
         self._update_db_label_field(label)
 
-    @abstractmethod
+    @abc.abstractmethod
     def _get_db_description_field(self):
         """
         Get the description of this node, acting directly at the DB level
         """
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     def _update_db_description_field(self, field_value):
         """
         Update the description of this node, acting directly at the DB level
@@ -461,11 +461,11 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         :return: a generator of the keys
         """
         if not self.is_stored:
-            for key, value in self._attrs_cache.items():
-                yield (key, value)
+            for key in self._attrs_cache:
+                yield key
         else:
-            for key, value in self._get_db_attrs_keys():
-                yield (key, value)
+            for key in self._get_db_attrs_keys():
+                yield key
 
     @abc.abstractmethod
     def _get_db_attrs_keys(self):
@@ -644,7 +644,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         self._set_db_extra(key, clean_value(value), exclusive)
         self._increment_version_number()
 
-    @abstractmethod
+    @abc.abstractmethod
     def _set_db_extra(self, key, value, exclusive):
         """
         Store extra directly in the DB, without checks.
@@ -689,7 +689,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
 
         self._reset_db_extras(clean_value(new_extras))
 
-    @abstractmethod
+    @abc.abstractmethod
     def _reset_db_extras(self, new_extras):
         """
         Resets the extras (replacing existing ones) directly in the DB
@@ -729,7 +729,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
             except IndexError:
                 raise error
 
-    @abstractmethod
+    @abc.abstractmethod
     def _get_db_extra(self, key):
         """
         Get an extra, directly from the DB.
@@ -768,7 +768,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         self._del_db_extra(key)
         self._increment_version_number()
 
-    @abstractmethod
+    @abc.abstractmethod
     def _del_db_extra(self, key):
         """
         Delete an extra, directly on the DB.
@@ -805,7 +805,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         for extra in self._db_extras_items():
             yield extra
 
-    @abstractmethod
+    @abc.abstractmethod
     def _db_extras_items(self):
         """
         Iterator over the extras (directly in the DB!)
@@ -1103,7 +1103,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         """
         pass
 
-    @abc.abstractclassmethod
+    @abc.abstractmethod
     def _get_db_input_links(self, link_type):
         """
         Return a list of tuples (label, aiida_class) for each input link,
@@ -1293,7 +1293,7 @@ class BackendNode(backends.BackendEntity, RepositoryMixin):
         # would have been raised, and the following lines are not executed)
         self._incoming_cache = list()
 
-    @abstractmethod
+    @abc.abstractmethod
     def _db_store(self, with_transaction=True):
         """
         Store a new node in the DB, also saving its repository directory

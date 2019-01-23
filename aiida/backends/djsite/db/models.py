@@ -1501,6 +1501,7 @@ wf_data_value_types = WorkflowDataValueType((
     'AIIDA',
 ))
 
+wf_default_call = "none"
 @python_2_unicode_compatible
 class DbWorkflow(m.Model):
     uuid = m.UUIDField(default=get_new_uuid, unique=True)
