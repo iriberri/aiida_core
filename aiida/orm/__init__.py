@@ -22,7 +22,7 @@ from .computers import *
 from .entities import *
 from .groups import *
 from .logs import *
-from .node import *
+from .nodes import *
 from .querybuilder import *
 from .users import *
 from .utils import *

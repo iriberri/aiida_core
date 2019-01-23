@@ -23,7 +23,7 @@ import six
 from aiida.common.exceptions import InvalidOperation
 from aiida.common.links import LinkType
 from aiida.common.lang import override
-from aiida.orm.node import Node
+from aiida.orm.nodes import Node
 
 
 @singledispatch
