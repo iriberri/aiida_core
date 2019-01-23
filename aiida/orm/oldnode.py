@@ -275,20 +275,6 @@ class AbstractNode(object):
         """
         return not self._to_be_stored
 
-    @abstractproperty
-    def ctime(self):
-        """
-        Return the creation time of the node.
-        """
-        pass
-
-    @abstractproperty
-    def mtime(self):
-        """
-        Return the modification time of the node.
-        """
-        pass
-
     def has_cached_links(self):
         """
         Return whether there are unstored incoming links in the cache.
@@ -402,14 +388,7 @@ class AbstractNode(object):
                 raise ValueError("Unable to set '{0}', set_{0} is not " "callable!".format(k))
             method(v)
 
-    @abstractproperty
-    def type(self):
-        """
-        Get the type of the node.
 
-        :return: a string.
-        """
-        pass
 
     @abstractproperty
     def nodeversion(self):
@@ -502,24 +481,7 @@ class AbstractNode(object):
         """
         return True
 
-    @abstractmethod
-    def get_user(self):
-        """
-        Get the user.
 
-        :return: a User model object
-        :rtype: :class:`aiida.orm.User`
-        """
-        pass
-
-    @abstractmethod
-    def set_user(self, user):
-        """
-        Set the user
-
-        :param user: The new user
-        """
-        pass
 
     def validate_incoming(self, source, link_type, link_label):
         """
@@ -870,104 +832,7 @@ class AbstractNode(object):
         :return:  a list of tuples (label, aiida_class)
         """
         pass
-
-    @abstractmethod
-    def get_computer(self):
-        """
-        Get the computer associated to the node.
-
-        :return: the Computer object or None.
-        """
-        pass
-
-    def set_computer(self, computer):
-        """
-        Set the computer to be used by the node.
-
-        Note that the computer makes sense only for some nodes: Calculation,
-        RemoteData, ...
-
-        :param computer: the computer object
-        """
-        from aiida import orm
-
-        if self._to_be_stored:
-            if not computer.is_stored:
-                raise ValueError("The computer instance has not yet been stored")
-            if isinstance(computer, orm.Computer):
-                computer = computer.backend_entity
-            self._set_db_computer(computer)
-        else:
-            raise ModificationNotAllowed("Node with uuid={} was already stored".format(self.uuid))
-
-    @abstractmethod
-    def _set_db_computer(self, computer):
-        """
-        Set the computer directly inside the dbnode member, in the DB.
-
-        DO NOT USE DIRECTLY.
-
-        :param computer: the computer object
-        """
-        pass
-
-    def add_comment(self, content, user=None):
-        """
-        Add a new comment.
-
-        :param content: string with comment
-        :param user: the user to associate with the comment, will use default if not supplied
-        :return: the newly created comment
-        """
-        from aiida import orm
-        from aiida.orm.comments import Comment
-
-        user = user or orm.User.objects.get_default()
-        return Comment(node=self, user=user, content=content).store()
-
-    def get_comment(self, identifier):
-        """
-        Return a comment corresponding to the given identifier.
-
-        :param identifier: the comment pk
-        :raise NotExistent: if the comment with the given id does not exist
-        :raise MultipleObjectsError: if the id cannot be uniquely resolved to a comment
-        :return: the comment
-        """
-        from aiida.orm.comments import Comment
-        return Comment.objects.get(comment=identifier)
-
-    def get_comments(self):
-        """
-        Return a sorted list of comments for this node.
-
-        :return: the list of comments, sorted by pk
-        """
-        from aiida.orm.comments import Comment
-        return Comment.objects.find(filters={'dbnode_id': self.pk}, order_by=[{'id': 'asc'}])
-
-    def update_comment(self, identifier, content):
-        """
-        Update the content of an existing comment.
-
-        :param identifier: the comment pk
-        :param content: the new comment content
-        :raise NotExistent: if the comment with the given id does not exist
-        :raise MultipleObjectsError: if the id cannot be uniquely resolved to a comment
-        """
-        from aiida.orm.comments import Comment
-        comment = Comment.objects.get(comment=identifier)
-        comment.set_content(content)
-
-    def remove_comment(self, identifier):
-        """
-        Delete an existing comment.
-
-        :param identifier: the comment pk
-        """
-        from aiida.orm.comments import Comment
-        Comment.objects.delete(comment=identifier)
-
+       
     @abstractmethod
     def _increment_version_number_db(self):
         """
@@ -978,14 +843,6 @@ class AbstractNode(object):
         :note: Do not manually increment the version number, because if
             two different threads are adding/changing an attribute concurrently,
             the version number would be incremented only once.
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def uuid(self):
-        """
-        :return: a string with the uuid
         """
         pass
 

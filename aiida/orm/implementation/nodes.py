@@ -88,39 +88,65 @@ class BackendNode(backends.BackendEntity):
     def get_computer(self):
         """
         Get the computer associated to the node.
-	For a CalcJobNode, this represents the computer on which the calculation was run.
- 	However, this can be used also for (some) data nodes, like RemoteData, to indicate
-	on which computer the data is sitting.
+	    For a CalcJobNode, this represents the computer on which the calculation was run.
+ 	    However, this can be used also for (some) data nodes, like RemoteData, to indicate
+	    on which computer the data is sitting.
 
         :return: the Computer object or None.
         """
+        pass
 
-    @abc.abstractmethod
     def set_computer(self, computer):
         """
-        Set the backend computer
+        Set the computer to be used by the node.
 
-        :param computer: the computer to set for this node
-        :type computer: :class:`aiida.orm.implementation.Computer`
+        Note that the computer makes sense only for some nodes: Calculation,
+        RemoteData, ...
+
+        :param computer: the computer object
         """
+        from aiida import orm
+
+        if self._to_be_stored:
+            if not computer.is_stored:
+                raise ValueError("The computer instance has not yet been stored")
+            if isinstance(computer, orm.Computer):
+                computer = computer.backend_entity
+            self._set_db_computer(computer)
+        else:
+            raise ModificationNotAllowed("Node with uuid={} was already stored".format(self.uuid))
 
     @abc.abstractmethod
+    def _set_db_computer(self, computer):
+        """
+        Set the computer directly inside the dbnode member, in the DB.
+
+        DO NOT USE DIRECTLY.
+
+        :param computer: the computer object
+        """
+        pass
+
+    @abstractmethod
     def get_user(self):
         """
-        Get the node user
+        Get the user.
 
-        :return: the node user
-        :rtype: :class:`aiida.orm.implementation.User`
+        :return: a User model object
+        :rtype: :class:`aiida.orm.User`
         """
+        pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def set_user(self, user):
         """
-        Set the node user
+        Set the user
 
-        :param user: the new user
-        :type user: :class:`aiida.orm.implementation.User`
+        :param user: The new user
         """
+        pass
+
+
 
     @property
     @abc.abstractmethod
@@ -653,7 +679,6 @@ class BackendNode(backends.BackendEntity):
 
     # region Comments
 
-    @abc.abstractmethod
     def add_comment(self, content, user=None):
         """
         Add a new comment.
@@ -662,8 +687,12 @@ class BackendNode(backends.BackendEntity):
         :param user: the user to associate with the comment, will use default if not supplied
         :return: the newly created comment
         """
+        from aiida import orm
+        from aiida.orm.comments import Comment
 
-    @abc.abstractmethod
+        user = user or orm.User.objects.get_default()
+        return Comment(node=self, user=user, content=content).store()
+
     def get_comment(self, identifier):
         """
         Return a comment corresponding to the given identifier.
@@ -673,16 +702,18 @@ class BackendNode(backends.BackendEntity):
         :raise MultipleObjectsError: if the id cannot be uniquely resolved to a comment
         :return: the comment
         """
+        from aiida.orm.comments import Comment
+        return Comment.objects.get(comment=identifier)
 
-    @abc.abstractmethod
     def get_comments(self):
         """
         Return a sorted list of comments for this node.
 
         :return: the list of comments, sorted by pk
         """
+        from aiida.orm.comments import Comment
+        return Comment.objects.find(filters={'dbnode_id': self.pk}, order_by=[{'id': 'asc'}])
 
-    @abc.abstractmethod
     def update_comment(self, identifier, content):
         """
         Update the content of an existing comment.
@@ -692,14 +723,18 @@ class BackendNode(backends.BackendEntity):
         :raise NotExistent: if the comment with the given id does not exist
         :raise MultipleObjectsError: if the id cannot be uniquely resolved to a comment
         """
+        from aiida.orm.comments import Comment
+        comment = Comment.objects.get(comment=identifier)
+        comment.set_content(content)
 
-    @abc.abstractmethod
     def remove_comment(self, identifier):
         """
         Delete an existing comment.
 
         :param identifier: the comment pk
         """
+        from aiida.orm.comments import Comment
+        Comment.objects.delete(comment=identifier)
 
     # endregion
 

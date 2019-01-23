@@ -144,44 +144,11 @@ class Node(AbstractNode):
         from aiida.common.exceptions import FeatureNotAvailable
         raise FeatureNotAvailable("The node query method is not supported in SQLAlchemy. Please use QueryBuilder.")
 
-    @property
-    def type(self):
-        # Type is immutable so no need to ensure the model is up to date
-        return self._dbnode.type
 
-    def get_user(self):
-        """
-        Get the user.
 
-        :return: an aiida user model object
-        """
-        from aiida import orm
+    
 
-        self._ensure_model_uptodate(attribute_names=['user'])
-        backend_user = self._backend.users.from_dbmodel(self._dbnode.user)
-        return orm.User.from_backend_entity(backend_user)
-
-    def set_user(self, user):
-        from aiida import orm
-
-        type_check(user, orm.User)
-        backend_user = user.backend_entity
-        self._dbnode.user = backend_user.dbmodel
-
-    def get_computer(self):
-        """
-        Get the computer associated to the node.
-
-        :return: the Computer object or None.
-        """
-        from aiida import orm
-
-        self._ensure_model_uptodate(attribute_names=['dbcomputer'])
-        if self._dbnode.dbcomputer is None:
-            return None
-
-        return orm.Computer.from_backend_entity(self.backend.computers.from_dbmodel(self._dbnode.dbcomputer))
-
+   
     def _get_db_label_field(self):
         """
         Get the label of the node.
@@ -287,9 +254,7 @@ class Node(AbstractNode):
             link_filter['type'] = link_type.value
         return ((i.label, get_orm_entity(i.output)) for i in DbLink.query.filter_by(**link_filter).distinct().all())
 
-    def _set_db_computer(self, computer):
-        type_check(computer, computers.SqlaComputer)
-        self._dbnode.dbcomputer = computer.dbmodel
+    
 
     @property
     def public(self):

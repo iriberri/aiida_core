@@ -149,6 +149,60 @@ class DjangoNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         """
         return self._dbmodel.mtime
 
+    @property
+    def type(self):
+        """
+        Get the type of the node.
+
+        :return: a string.
+        """
+        return self._dbmodel.type
+
+    def get_computer(self):
+        """
+        Get the computer associated to the node.
+
+        :return: the Computer object or None.
+        """
+        from aiida import orm
+
+        if self._dbmodel.dbcomputer is None:
+            return None
+
+        return orm.Computer.from_backend_entity(self._backend.computers.from_dbmodel(self._dbmodel.dbcomputer))
+
+    def _set_db_computer(self, computer):
+        """
+        Set the computer directly inside the dbnode member, in the DB.
+
+        DO NOT USE DIRECTLY.
+
+        :param computer: the computer object
+        """
+        type_check(computer, computers.DjangoComputer)
+        self._dbmodel.dbcomputer = computer.dbmodel
+
+    def get_user(self):
+        """
+        Get the user.
+
+        :return: a User model object
+        :rtype: :class:`aiida.orm.User`
+        """
+        from aiida import orm
+
+        return orm.User.from_backend_entity(self._backend.users.from_dbmodel(self._dbmodel.user))
+
+    def set_user(self, user):
+        """
+        Set the user
+
+        :param user: The new user
+        """
+        type_check(user, user.User)
+        assert user.backend == self.backend, "Passed user from different backend"
+        self._dbmodel.user = user.backend_entity.dbmodel
+
     def _set_db_extra(self, key, value, exclusive=False):        
         """
         Store extra directly in the DB, without checks.

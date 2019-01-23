@@ -23,7 +23,6 @@ from aiida.common.links import LinkType
 from aiida.common.utils import get_new_uuid
 from aiida.common.lang import type_check
 from aiida.orm.implementation.general.node import AbstractNode, _HASH_EXTRA_KEY
-from . import computer as computers
 
 
 class Node(AbstractNode):
@@ -154,12 +153,10 @@ class Node(AbstractNode):
             # Base Node class, with empty string
             return DbNode.aiidaobjects.filter(*args, **kwargs)
 
-    @property
-    def type(self):
-        return self._dbnode.type
 
 
-    def _get_db_label_field(self):
+
+    def _db_label_field(self):
         return self._dbnode.label
 
     def _update_db_label_field(self, field_value):
@@ -244,22 +241,7 @@ class Node(AbstractNode):
             link_filter['type'] = link_type.value
         return ((i.label, get_orm_entity(i.output)) for i in DbLink.objects.filter(**link_filter).distinct())
 
-    def get_computer(self):
-        """
-        Get the computer associated to the node.
 
-        :return: the Computer object or None.
-        """
-        from aiida import orm
-
-        if self._dbnode.dbcomputer is None:
-            return None
-
-        return orm.Computer.from_backend_entity(self._backend.computers.from_dbmodel(self._dbnode.dbcomputer))
-
-    def _set_db_computer(self, computer):
-        type_check(computer, computers.DjangoComputer)
-        self._dbnode.dbcomputer = computer.dbmodel
 
     def _db_store_all(self, with_transaction=True, use_cache=None):
         """
@@ -287,14 +269,6 @@ class Node(AbstractNode):
 
         return self
 
-    def get_user(self):
-        from aiida import orm
-
-        return orm.User.from_backend_entity(self._backend.users.from_dbmodel(self._dbnode.user))
-
-    def set_user(self, user):
-        assert user.backend == self.backend, "Passed user from different backend"
-        self._dbnode.user = user.backend_entity.dbmodel
 
     def _store_cached_input_links(self, with_transaction=True):
         """

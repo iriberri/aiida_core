@@ -445,15 +445,6 @@ class Node(entities.Entity):
         """
         return users.User.from_backend_entity(self.backend_entity.get_user())
 
-    def set_user(self, user):
-        """
-        Set the user
-
-        :param user: The new user
-        """
-        type_check(user, user.User)
-        self.backend_entity.set_user(user.backend_entity)
-
     def validate_incoming(self, source, link_type, link_label):
         """
         Validate adding a link of the given type from a given node to ourself.
@@ -763,27 +754,9 @@ class Node(entities.Entity):
 
         :return: the Computer object or None.
         """
-        backend_computer = self.backend_entity.get_computer()
-        if backend_computer is None:
-            return None
+        self._backend_entity.get_computer()
 
-        return computers.Computer.from_backend_entity(self.backend_entity.computer)
-
-    def set_computer(self, computer):
-        """
-        Set the computer to be used by the node.
-
-        :param computer: the computer object
-        :type computer: :class:`aiida.orm.Computer`
-        """
-        type_check(computer, computers.Computer)
-
-        if not self.is_stored:
-            if not computer.is_stored:
-                raise ValueError("The computer instance has not yet been stored")
-            self.backend_entity.set_db_computer(computer.backend_entity)
-        else:
-            raise exceptions.ModificationNotAllowed("Node with uuid={} was already stored".format(self.uuid))
+    
 
     # endregion
 
@@ -956,8 +929,8 @@ class Node(entities.Entity):
         :param user: the user to associate with the comment, will use default if not supplied
         :return: the newly created comment
         """
-        user = user or users.User.objects.get_default()
-        return comments.Comment(node=self, user=user, content=content, backend=self._backend).store()
+        self._backend_entity.add_comment(content, user)
+
 
     def get_comment(self, identifier):
         """
@@ -968,7 +941,7 @@ class Node(entities.Entity):
         :raise MultipleObjectsError: if the id cannot be uniquely resolved to a comment
         :return: the comment
         """
-        return comments.Comment.objects(self._backend).get(comment=identifier)
+        self._backend_entity.get_comment(identifier)
 
     def get_comments(self):
         """
@@ -976,7 +949,7 @@ class Node(entities.Entity):
 
         :return: the list of comments, sorted by pk
         """
-        return comments.Comment.objects(self._backend).find(filters={'dbnode_id': self.pk}, order_by=[{'id': 'asc'}])
+        self._backend_entity.get_comment(identifier)
 
     def update_comment(self, identifier, content):
         """
@@ -987,7 +960,7 @@ class Node(entities.Entity):
         :raise NotExistent: if the comment with the given id does not exist
         :raise MultipleObjectsError: if the id cannot be uniquely resolved to a comment
         """
-        comments.Comment.objects(self._backend).get(comment=identifier).set_content(content)
+        self._backend_entity.update_comment(identifier, content)
 
     def remove_comment(self, identifier):
         """
@@ -995,7 +968,7 @@ class Node(entities.Entity):
 
         :param identifier: the comment pk
         """
-        comments.Comment.objects(self._backend).delete(comment=identifier)
+        self._backend_entity.remove_comment(identifier)
 
     @property
     def uuid(self):

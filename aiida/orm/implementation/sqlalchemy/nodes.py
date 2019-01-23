@@ -188,8 +188,64 @@ class SqlaNode(entities.SqlaModelEntity[models.DbNode], BackendNode):
         self._ensure_model_uptodate(attribute_names=['mtime'])
         return self._dbmodel.mtime
 
+    @property
+    def type(self):
+        """
+        Get the type of the node.
 
+        :return: a string.
+        """
+        # Type is immutable so no need to ensure the model is up to date
+        return self._dbmodel.type
 
+    def get_computer(self):
+        """
+        Get the computer associated to the node.
+
+        :return: the Computer object or None.
+        """
+        from aiida import orm
+
+        self._ensure_model_uptodate(attribute_names=['dbcomputer'])
+        if self._dbmodel.dbcomputer is None:
+            return None
+
+        return orm.Computer.from_backend_entity(self.backend.computers.from_dbmodel(self._dbmodel.dbcomputer))
+
+    def _set_db_computer(self, computer):
+                """
+        Set the computer directly inside the dbnode member, in the DB.
+
+        DO NOT USE DIRECTLY.
+
+        :param computer: the computer object
+        """
+        type_check(computer, computers.SqlaComputer)
+        self._dbmodel.dbcomputer = computer.dbmodel
+
+    def get_user(self):
+        """
+        Get the user.
+
+        :return: an aiida user model object
+        """
+        from aiida import orm
+
+        self._ensure_model_uptodate(attribute_names=['user'])
+        backend_user = self._backend.users.from_dbmodel(self._dbmodel.user)
+        return orm.User.from_backend_entity(backend_user)
+
+    def set_user(self, user):
+        """
+        Set the user
+
+        :param user: The new user
+        """
+        from aiida import orm
+
+        type_check(user, orm.User)
+        backend_user = user.backend_entity
+        self._dbmodel.user = backend_user.dbmodel
 
     def _set_db_extra(self, key, value, exclusive=False):
         """
