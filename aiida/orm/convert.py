@@ -25,6 +25,10 @@ except ImportError:
 
 from aiida.orm.implementation import BackendComputer, BackendGroup, BackendUser, BackendAuthInfo, BackendComment, \
     BackendLog
+from aiida.orm.implementation.nodes import BackendNode
+from aiida.orm.implementation.nodes.process import BackendProcessNode
+from aiida.orm.implementation.nodes.process.calculation import BackendCalculationNode
+from aiida.orm.implementation.nodes.process.workflow import BackendWorkflowNode
 from aiida.orm.node import Node
 
 
@@ -78,10 +82,25 @@ def _(backend_entity):
 
     return comments.Comment.from_backend_entity(backend_entity)
 
-
-@get_orm_entity.register(Node)
+@get_orm_entity.register(BackendNode)
 def _(backend_entity):
-    return backend_entity
+    from aiida.orm.nodes import Node
+    return Node.from_backend_entity(backend_entity)
+
+@get_orm_entity.register(BackendProcessNode)
+def _(backend_entity):
+    from aiida.orm.nodes.process import ProcessNode
+    return ProcessNode.from_backend_entity(backend_entity)
+
+@get_orm_entity.register(BackendCalculationNode)
+def _(backend_entity):
+    from aiida.orm.nodes.process.calculation import CalculationNode
+    return CalclationNode.from_backend_entity(backend_entity)
+
+@get_orm_entity.register(BackendWorkflowNode)
+def _(backend_entity):
+    from aiida.orm.nodes.process.workflow import WorkflowNode
+    return WorkflowNode.from_backend_entity(backend_entity)
 
 
 class ConvertIterator(Iterator, Sized):
