@@ -30,19 +30,20 @@ from aiida.common.lang import combomethod, classproperty, type_check
 from aiida.common.escaping import sql_string_match
 from aiida.manage import get_manager
 from aiida.manage.caching import get_use_cache
+from aiida.orm import comments
+from aiida.orm import convert
+from aiida.orm import entities
+from aiida.orm import groups
+from aiida.orm import computers
+from aiida.orm import querybuilder
+from aiida.orm import users
 from aiida.orm.nodes.process import ProcessNode
 from aiida.orm.utils.node import AbstractNodeMeta
 from aiida.orm.utils.managers import NodeInputManager, NodeOutputManager
 from aiida.orm.implementation.nodes import _NO_DEFAULT
-from . import comments
-from . import convert
-from . import entities
-from . import groups
-from . import computers
-from . import querybuilder
-from . import users
 
-__all__ = ('Node',)
+__all__ = ('CalculationNode',)
+
 
 @six.add_metaclass(AbstractNodeMeta)
 class CalculationNode(ProcessNode):

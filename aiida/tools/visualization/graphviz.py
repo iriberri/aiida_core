@@ -42,9 +42,9 @@ def draw_graph(origin_node,
         If an invalid format is provided graphviz prints a helpful message, so this doesn't need to be implemented here.
     """
     # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-    from aiida.orm.node import ProcessNode
+    from aiida.orm.nodes import ProcessNode
     from aiida.orm.code import Code
-    from aiida.orm.node import Node
+    from aiida.orm.nodes import Node
     from aiida.common.links import LinkType
     from aiida.orm.querybuilder import QueryBuilder
 

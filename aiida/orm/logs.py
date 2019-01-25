@@ -15,7 +15,7 @@ from __future__ import absolute_import
 from aiida.common import timezone
 from aiida.manage import get_manager
 from . import entities
-from . import node
+from . import nodes
 
 __all__ = ('Log', 'OrderSpecifier', 'ASCENDING', 'DESCENDING')
 

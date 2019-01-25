@@ -20,7 +20,7 @@ from aiida.common import exceptions
 from aiida.common.utils import export_shard_uuid, get_class_string, grouper
 from aiida.orm.computers import Computer
 from aiida.orm.groups import Group, GroupTypeString
-from aiida.orm.node import Node
+from aiida.orm.nodes import Node
 from aiida.orm.querybuilder import QueryBuilder
 from aiida.orm.users import User
 from aiida.orm.logs import Log
@@ -1742,7 +1742,7 @@ def export_tree(what, folder,allowed_licenses=None, forbidden_licenses=None,
     import os
     import aiida
     from aiida.orm import Node, Data, Group, Log
-    from aiida.orm.node import ProcessNode
+    from aiida.orm.nodes import ProcessNode
     from aiida.common.exceptions import ContentNotExistent
     from aiida.common.links import LinkType
     from aiida.common.folders import RepositoryFolder

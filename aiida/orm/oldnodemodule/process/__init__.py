@@ -27,15 +27,6 @@ class ProcessNode(Sealable, Node):
     """
     # pylint: disable=too-many-public-methods,abstract-method
 
-    CHECKPOINT_KEY = 'checkpoints'
-    EXCEPTION_KEY = 'exception'
-    EXIT_MESSAGE_KEY = 'exit_message'
-    EXIT_STATUS_KEY = 'exit_status'
-    PROCESS_PAUSED_KEY = 'paused'
-    PROCESS_LABEL_KEY = 'process_label'
-    PROCESS_STATE_KEY = 'process_state'
-    PROCESS_STATUS_KEY = 'process_status'
-
     # The link_type might not be correct while the object is being created.
     _hash_ignored_inputs = ['CALL_CALC', 'CALL_WORK']
 
@@ -63,15 +54,3 @@ class ProcessNode(Sealable, Node):
             cls.PROCESS_STATE_KEY,
             cls.PROCESS_STATUS_KEY,
         )
-
-    
-
-    
-
-    
-    
-
-    
-    
-
-    

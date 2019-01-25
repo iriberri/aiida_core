@@ -350,15 +350,15 @@ def _get_calculation(node):
     Gets the parent (immediate) calculation, attached as the input of
     the node.
 
-    :param node: an instance of subclass of :py:class:`aiida.orm.node.Node`
+    :param node: an instance of subclass of :py:class:`aiida.orm.nodes.Node`
     :return: an instance of subclass of
-        :py:class:`aiida.orm.node.process.ProcessNode`
+        :py:class:`aiida.orm.nodes.process.ProcessNode`
     :raises MultipleObjectsError: if the node has more than one calculation
         attached.
     """
     from aiida.common.exceptions import MultipleObjectsError
     from aiida.common.links import LinkType
-    from aiida.orm.node import ProcessNode
+    from aiida.orm.nodes import ProcessNode
 
     parent_calculations = node.get_incoming(node_class=ProcessNode, link_type=LinkType.CREATE).all()
 
@@ -379,8 +379,8 @@ def _assert_same_parents(a, b):
     Can be used to check whether two data nodes originate from the same
     calculation.
 
-    :param a: an instance of subclass of :py:class:`aiida.orm.node.Node`
-    :param b: an instance of subclass of :py:class:`aiida.orm.node.Node`
+    :param a: an instance of subclass of :py:class:`aiida.orm.nodes.Node`
+    :param b: an instance of subclass of :py:class:`aiida.orm.nodes.Node`
 
     :raises ValueError: if the condition is not met.
     """
@@ -450,7 +450,7 @@ def _collect_calculation_data(calc):
     """
     from aiida.common.links import LinkType
     from aiida.orm.nodes.data import Data
-    from aiida.orm.node import CalculationNode, CalcJobNode, CalcFunctionNode, WorkflowNode
+    from aiida.orm.nodes import CalculationNode, CalcJobNode, CalcFunctionNode, WorkflowNode
     import hashlib
     import os
     calcs_now = []
@@ -1076,10 +1076,10 @@ def deposit(what, type, author_name=None, author_email=None, url=None,
             replace=None, message=None, **kwargs):
     """
     Launches a
-    :py:class:`aiida.orm.node.process.calculation.calcjob.CalcJobNode`
+    :py:class:`aiida.orm.nodes.process.calculation.calcjob.CalcJobNode`
     to deposit data node to \*COD-type database.
 
-    :return: launched :py:class:`aiida.orm.node.process.calculation.calcjob.CalcJobNode`
+    :return: launched :py:class:`aiida.orm.nodes.process.calculation.calcjob.CalcJobNode`
         instance.
     :raises ValueError: if any of the required parameters are not given.
     """
@@ -1227,11 +1227,11 @@ def deposition_cmdline_parameters(parser, expclass="Data"):
 def translate_calculation_specific_values(calc, translator, **kwargs):
     """
     Translates calculation-specific values from
-    :py:class:`aiida.orm.node.process.calculation.calcjob.CalcJobNode` subclass to
+    :py:class:`aiida.orm.nodes.process.calculation.calcjob.CalcJobNode` subclass to
     appropriate TCOD CIF tags.
 
     :param calc: an instance of
-        :py:class:`aiida.orm.node.process.calculation.calcjob.CalcJobNode` subclass.
+        :py:class:`aiida.orm.nodes.process.calculation.calcjob.CalcJobNode` subclass.
     :param translator: class, derived from
         :py:class:`aiida.tools.dbexporters.tcod_plugins.BaseTcodtranslator`.
     :raises ValueError: if **translator** is not derived from proper class.

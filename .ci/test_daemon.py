@@ -21,10 +21,10 @@ from aiida.common import exceptions
 from aiida.manage.caching import enable_caching
 from aiida.daemon.client import get_daemon_client
 from aiida.orm import Code, CalculationFactory, DataFactory
-from aiida.orm.data.int import Int
-from aiida.orm.data.str import Str
-from aiida.orm.data.list import List
-from aiida.orm.node import CalcJobNode
+from aiida.orm.nodes.data.int import Int
+from aiida.orm.nodes.data.str import Str
+from aiida.orm.nodes.data.list import List
+from aiida.orm.nodes import CalcJobNode
 from aiida.work.launch import run_get_node, submit
 from aiida.work.persistence import ObjectLoader
 from workchains import (

@@ -18,7 +18,7 @@ from aiida.backends.sqlalchemy.models.user import DbUser
 from aiida.backends.sqlalchemy.models.node import DbNode
 from aiida.common.links import LinkType
 from aiida.orm import Data
-from aiida.orm.node import CalculationNode
+from aiida.orm.nodes import CalculationNode
 import aiida
 
 from aiida.common.utils import get_new_uuid

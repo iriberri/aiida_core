@@ -116,7 +116,7 @@ class TestProcessBuilder(AiidaTestCase):
         """
         Test the get_builder_restart method of CalcJobNode class
         """
-        from aiida.orm.node import CalcJobNode
+        from aiida.orm.nodes import CalcJobNode
 
         original = CalcJobNode()
         original.set_option('resources', {'num_machines': 1, 'num_mpiprocs_per_machine': 1})

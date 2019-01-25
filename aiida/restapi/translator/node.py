@@ -550,7 +550,7 @@ class NodeTranslator(BaseTranslator):
         """
 
         from aiida.orm.querybuilder import QueryBuilder
-        from aiida.orm.node import Node
+        from aiida.orm.nodes import Node
 
         def get_node_shape(ntype):
             """

@@ -49,7 +49,7 @@ Node
    :members:
    :noindex:
 
-.. autoclass:: aiida.orm.node.Node
+.. autoclass:: aiida.orm.nodes.Node
    :noindex:
 
 
@@ -224,12 +224,12 @@ ORM documentation: Calculations
 .. note:: This list only includes the classes included in AiiDA-core. For all the plugin subclasses,
   check the corresponding plugin repositories.
 
-.. automodule:: aiida.orm.node.process
+.. automodule:: aiida.orm.nodes.process
    :members:
    :noindex:
    :special-members: __init__
 
-.. automodule:: aiida.orm.node.process.calculation.calcjob
+.. automodule:: aiida.orm.nodes.process.calculation.calcjob
    :members:
    :noindex:
    :special-members: __init__

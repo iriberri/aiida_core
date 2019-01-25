@@ -257,7 +257,7 @@ Also you should make sure your calculation plugin inherit the class from ``JobCa
 
 .. note:: The base ``Calculation`` class should only be used as the abstract
   base class. Any calculation that needs to run on a remote scheduler must
-  inherit from  :class:`~aiida.orm.node.process.calculation.calcjob.CalcJobNode`, that
+  inherit from  :class:`~aiida.orm.nodes.process.calculation.calcjob.CalcJobNode`, that
   contains all the methods to run on a remote scheduler, get the calculation
   state, copy files remotely and retrieve them, ...
 

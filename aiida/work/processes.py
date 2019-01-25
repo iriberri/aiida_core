@@ -33,7 +33,7 @@ from aiida.common.lang import classproperty, override, protected
 from aiida.common.links import LinkType
 from aiida.common.log import LOG_LEVEL_REPORT
 from aiida import orm
-from aiida.orm.node import ProcessNode, CalculationNode, WorkflowNode
+from aiida.orm.nodes import ProcessNode, CalculationNode, WorkflowNode
 from aiida.common import serialize
 from aiida.work.ports import InputPort, PortNamespace
 from aiida.work.process_spec import ProcessSpec, ExitCode
@@ -401,7 +401,7 @@ class Process(plumpy.Process):
         Get the parent process node
 
         :return: the parent process node if there is one
-        :rtype: :class:`aiida.orm.node.process.ProcessNode`
+        :rtype: :class:`aiida.orm.nodes.process.ProcessNode`
         """
         # Can't get it if we don't know our parent
         if self._parent_pid is None:

@@ -30,19 +30,19 @@ from aiida.common.lang import combomethod, classproperty, type_check
 from aiida.common.escaping import sql_string_match
 from aiida.manage import get_manager
 from aiida.manage.caching import get_use_cache
+from aiida.orm import comments
+from aiida.orm import convert
+from aiida.orm import entities
+from aiida.orm import groups
+from aiida.orm import computers
+from aiida.orm import users
 from aiida.orm.nodes import Node
 from aiida.orm.utils.node import AbstractNodeMeta
 from aiida.orm.utils.managers import NodeInputManager, NodeOutputManager
 from aiida.orm.implementation.nodes import _NO_DEFAULT
-from . import comments
-from . import convert
-from . import entities
-from . import groups
-from . import computers
-from . import querybuilder
-from . import users
 
-__all__ = ('Node',)
+__all__ = ('ProcessNode',)
+
 
 @six.add_metaclass(AbstractNodeMeta)
 class ProcessNode(Node):
@@ -52,6 +52,15 @@ class ProcessNode(Node):
     TODO: Document
     """
 
+    CHECKPOINT_KEY = 'checkpoints'
+    EXCEPTION_KEY = 'exception'
+    EXIT_MESSAGE_KEY = 'exit_message'
+    EXIT_STATUS_KEY = 'exit_status'
+    PROCESS_PAUSED_KEY = 'paused'
+    PROCESS_LABEL_KEY = 'process_label'
+    PROCESS_STATE_KEY = 'process_state'
+    PROCESS_STATUS_KEY = 'process_status'
+
     @property
     def logger(self):
         """
@@ -60,7 +69,7 @@ class ProcessNode(Node):
         :return: LoggerAdapter object, that works like a logger, but also has the 'extra' embedded
         """
         return self._backend_entity.logger()
-    
+
     @property
     def process_label(self):
         """
@@ -125,7 +134,6 @@ class ProcessNode(Node):
         :rtype: bool
         """
         return self._backend_entity.is_killed()
-
 
     @property
     def is_finished(self):
@@ -210,7 +218,7 @@ class ProcessNode(Node):
         :returns: True if the Calculation is marked as paused, False otherwise
         """
         return self._backend_entity.paused()
-    
+
     @property
     def called(self):
         """

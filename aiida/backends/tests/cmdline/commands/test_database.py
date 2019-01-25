@@ -21,8 +21,8 @@ from aiida.backends.testbase import AiidaTestCase
 from aiida.cmdline.commands import cmd_database
 from aiida.common.links import LinkType
 from aiida.orm.nodes.data import Data
-from aiida.orm.node import Node
-from aiida.orm.node import CalculationNode, WorkflowNode
+from aiida.orm.nodes import Node
+from aiida.orm.nodes import CalculationNode, WorkflowNode
 
 
 class TestVerdiDatabasaIntegrity(AiidaTestCase):

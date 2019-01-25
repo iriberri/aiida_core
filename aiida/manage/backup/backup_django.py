@@ -17,7 +17,7 @@ import os
 from aiida.backends.djsite.db.models import DbNode
 from aiida.manage.backup.backup_base import AbstractBackup, BackupError
 from aiida.common.folders import RepositoryFolder
-from aiida.orm.node import Node
+from aiida.orm.nodes import Node
 
 
 class Backup(AbstractBackup):

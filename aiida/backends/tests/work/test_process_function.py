@@ -18,8 +18,8 @@ from aiida.backends.testbase import AiidaTestCase
 from aiida.orm.nodes.data.bool import get_true_node
 from aiida.orm.nodes.data.int import Int
 from aiida.orm.nodes.data.str import Str
-from aiida.orm.node import WorkFunctionNode
-from aiida.orm.node import CalcFunctionNode
+from aiida.orm.nodes import WorkFunctionNode
+from aiida.orm.nodes import CalcFunctionNode
 from aiida.work import run, run_get_node, submit, calcfunction, workfunction, Process, ExitCode
 
 DEFAULT_INT = 256

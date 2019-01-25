@@ -14,13 +14,13 @@ import six
 from aiida.common.datastructures import CalcJobState
 from aiida.common.lang import classproperty
 from aiida.common.utils import str_timedelta
-from aiida.orm.node import ProcessNode
+from aiida.orm.nodes import ProcessNode
 from aiida.orm.mixins import Sealable
 from aiida.common import timezone
 
 from . import CalculationNode
 
-__all__ = ('CalcJobNode', )
+__all__ = ('CalcJobNode',)
 
 SEALED_KEY = 'attributes.{}'.format(Sealable.SEALED_KEY)
 CALC_JOB_STATE_KEY = 'attributes.state'
@@ -148,7 +148,11 @@ class CalcJobNode(CalculationNode):
                 builder.metadata.options = options
             elif isinstance(port, PortNamespace):
                 namespace = port_name + '_'
-                sub = {entry.link_label[len(namespace):]: entry.node for entry in inputs if entry.link_label.startswith(namespace)}
+                sub = {
+                    entry.link_label[len(namespace):]: entry.node
+                    for entry in inputs
+                    if entry.link_label.startswith(namespace)
+                }
                 if sub:
                     setattr(builder, port_name, sub)
             else:
@@ -821,7 +825,7 @@ class CalcJobNode(CalculationNode):
                     dt = timezone.delta(time, times_since)
                     d['calculation'][proj] = str_timedelta(dt, negative_to_zero=True, max_num_fields=1)
                 else:
-                    d['calculation'][proj] =' '.join([
+                    d['calculation'][proj] = ' '.join([
                         timezone.localtime(time).isoformat().split('T')[0],
                         timezone.localtime(time).isoformat().split('T')[1].split('.')[0].rsplit(":", 1)[0]
                     ])

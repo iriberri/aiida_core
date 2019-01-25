@@ -26,8 +26,8 @@ No. Description                     Input                                       
 === =============================== ================================================================== ================================================================== ====== ============
 
 Type of each step's calculation
-(:py:class:`CalcFunctionNode <aiida.orm.node.process.calculation.calcfunction.CalcFunctionNode>`
-or :py:class:`CalcJobNode <aiida.orm.node.process.calculation.calcjob.CalcJobNode>`)
+(:py:class:`CalcFunctionNode <aiida.orm.nodes.process.calculation.calcfunction.CalcFunctionNode>`
+or :py:class:`CalcJobNode <aiida.orm.nodes.process.calculation.calcjob.CalcJobNode>`)
 defined in column *Type*. Each step is described in more detail below:
 
 * Conversion of the StructureData to CifData
@@ -54,7 +54,7 @@ defined in column *Type*. Each step is described in more detail below:
     re-running of calculations, outputs from the calculations and exported
     subset of AiiDA database. It's not quite clear what/how to record the
     metadata for calculations of type
-    :py:class:`CalcFunctionNode <aiida.orm.node.process.calculation.calcfunction.CalcFunctionNode>`.
+    :py:class:`CalcFunctionNode <aiida.orm.nodes.process.calculation.calcfunction.CalcFunctionNode>`.
 * Depostition to the TCOD
     Deposition of the final
     :py:class:`CifData <aiida.orm.nodes.data.cif.CifData>` to the TCOD is

@@ -170,7 +170,7 @@ class TestVerdiGroupSetup(AiidaTestCase):
         """
         Test group addnotes command
         """
-        from aiida.orm.node import CalculationNode
+        from aiida.orm.nodes import CalculationNode
 
         node = CalculationNode()
         node._set_attr('attr1', 'OK')  # pylint: disable=protected-access

@@ -17,7 +17,7 @@ from __future__ import absolute_import
 from aiida.backends.testbase import AiidaTestCase
 from aiida.common.links import LinkType
 from aiida.orm import DataFactory
-from aiida.orm.node import CalcJobNode
+from aiida.orm.nodes import CalcJobNode
 from aiida.orm.computers import Computer
 from aiida.orm.nodes.data import Data
 from aiida.orm.querybuilder import QueryBuilder
