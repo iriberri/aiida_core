@@ -11,7 +11,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
 from aiida.orm import Data
-from aiida.orm.data import to_aiida_type
+from aiida.orm.nodes.data import to_aiida_type
 
 
 class ParameterData(Data):
@@ -78,8 +78,7 @@ class ParameterData(Data):
     def add_path(self, *args, **kwargs):
         from aiida.common.exceptions import ModificationNotAllowed
 
-        raise ModificationNotAllowed(
-            "Cannot add files or directories to a ParameterData object")
+        raise ModificationNotAllowed("Cannot add files or directories to a ParameterData object")
 
         # def validate(self):
         #        # There should be nothing specific to check

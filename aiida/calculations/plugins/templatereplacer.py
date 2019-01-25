@@ -16,9 +16,9 @@ import six
 
 from aiida.common import exceptions
 from aiida.common.datastructures import CalcInfo, CodeInfo
-from aiida.orm.data.parameter import ParameterData
-from aiida.orm.data.remote import RemoteData
-from aiida.orm.data.singlefile import SinglefileData
+from aiida.orm.nodes.data.parameter import ParameterData
+from aiida.orm.nodes.data.remote import RemoteData
+from aiida.orm.nodes.data.singlefile import SinglefileData
 from aiida.work.calcjob import CalcJob
 
 

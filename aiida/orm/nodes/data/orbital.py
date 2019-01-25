@@ -14,7 +14,7 @@ from __future__ import absolute_import
 import six
 from six.moves import zip
 
-from aiida.orm.data.structure import Site as site_class
+from aiida.orm.nodes.data.structure import Site as site_class
 from aiida.orm import Data
 from aiida.common.exceptions import ValidationError, InputValidationError
 from aiida.tools.data.orbital import OrbitalFactory, Orbital
@@ -89,13 +89,11 @@ class OrbitalData(Data):
         filter_dict.update(kwargs)
         # prevents KeyError from occuring
         orbital_dicts = [x for x in orbital_dicts if all([y in x for y in filter_dict])]
-        orbital_dicts = [x for x in orbital_dicts if
-                         all([x[y] == filter_dict[y] for y in filter_dict])]
+        orbital_dicts = [x for x in orbital_dicts if all([x[y] == filter_dict[y] for y in filter_dict])]
 
         list_of_outputs = []
         for orbital_dict in orbital_dicts:
-            OrbitalClass = self._get_orbital_class_from_orbital_dict(
-                            orbital_dict)
+            OrbitalClass = self._get_orbital_class_from_orbital_dict(orbital_dict)
             orbital = OrbitalClass()
             try:
                 orbital.set_orbital_dict(orbital_dict)
@@ -121,37 +119,34 @@ class OrbitalData(Data):
             orbital = [orbital]
         if not isinstance(tag, list):
             if tag is None:
-                tag = ['']*len(orbital)
+                tag = [''] * len(orbital)
             else:
                 tag = [tag]
         # check if list length matches
         if len(tag) != len(orbital):
             raise ValueError()
-        for input_name, this_input, kind in [['orbital', orbital, Orbital],
-                                            ['tag', tag, six.string_types]]:
+        for input_name, this_input, kind in [['orbital', orbital, Orbital], ['tag', tag, six.string_types]]:
             if not isinstance(this_input, (list, tuple)):
                 raise ValueError
             if any([True for _ in this_input if not isinstance(_, kind)]):
-                raise ValueError("{} must be a list of {}"
-                                 "".format(input_name, kind))
+                raise ValueError("{} must be a list of {}" "".format(input_name, kind))
         list_of_tags_to_be_stored = []
         list_of_orbitaldicts_to_be_stored = []
         for this_projection, this_tag in zip(orbital, tag):
             orbital_dict = this_projection.get_orbital_dict()
-            OrbitalClass = self._get_orbital_class_from_orbital_dict(
-                           orbital_dict)
+            OrbitalClass = self._get_orbital_class_from_orbital_dict(orbital_dict)
             test_orbital = OrbitalClass()
             try:
                 test_orbital.set_orbital_dict(orbital_dict)
             except ValidationError:
-                raise ValueError("The orbital of tag {} did not"
-                                 "pass the validation test".format(this_tag))
+                raise ValueError("The orbital of tag {} did not" "pass the validation test".format(this_tag))
             orbital_dict = test_orbital.get_orbital_dict()
             list_of_tags_to_be_stored.append(this_tag)
             list_of_orbitaldicts_to_be_stored.append(orbital_dict)
         self._set_attr('orbital_dicts', list_of_orbitaldicts_to_be_stored)
         if tag is not None:
             self._set_attr('tags', list_of_tags_to_be_stored)
+
 
 ##########################################################################
 #     Here are some ideas for potential future convenience methods
@@ -183,4 +178,3 @@ class OrbitalData(Data):
 #
 #    def set_realhydrogenorbitals_from_structure(self, structure, pseudo_family=None):
 #        raise NotImplementedError
-

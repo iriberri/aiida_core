@@ -29,7 +29,7 @@ def delete_code(code):
     needed to set the internal state of the object after calling
     computer.delete().
     """
-    from aiida.orm.data.code import Code
+    from aiida.orm.nodes.data.code import Code
 
     type_check(code, Code)
 

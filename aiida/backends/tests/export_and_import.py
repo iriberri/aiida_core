@@ -44,7 +44,7 @@ class TestSpecificImport(AiidaTestCase):
         import code used to crash. This test demonstrates this problem.
         """
         import tempfile
-        from aiida.orm.data.parameter import ParameterData
+        from aiida.orm.nodes.data.parameter import ParameterData
         from aiida.orm.importexport import export, import_data
         from aiida.orm.node import Node
         from aiida.orm.querybuilder import QueryBuilder
@@ -88,8 +88,8 @@ class TestSpecificImport(AiidaTestCase):
         import tempfile
         from aiida.common.links import LinkType
         from aiida.orm.node import CalculationNode
-        from aiida.orm.data.structure import StructureData
-        from aiida.orm.data.remote import RemoteData
+        from aiida.orm.nodes.data.structure import StructureData
+        from aiida.orm.nodes.data.remote import RemoteData
         from aiida.orm.importexport import export, import_data
         from aiida.orm.node import Node
         from aiida.orm.querybuilder import QueryBuilder
@@ -196,7 +196,7 @@ class TestSimple(AiidaTestCase):
         import tempfile
 
         from aiida.orm import load_node
-        from aiida.orm.data.base import Str, Int, Float, Bool
+        from aiida.orm.nodes.data.base import Str, Int, Float, Bool
         from aiida.orm.importexport import export
 
         # Creating a folder for the import/export files
@@ -338,7 +338,7 @@ class TestSimple(AiidaTestCase):
 
         from aiida.orm.importexport import export
         from aiida.common.folders import SandboxFolder
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.orm import load_node
         import aiida.common.json as json
 
@@ -463,7 +463,7 @@ class TestSimple(AiidaTestCase):
 
         from aiida.orm import load_node
         from aiida.orm.node import CalcJobNode
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.orm.importexport import export
         from aiida.common.links import LinkType
         from aiida.manage import get_manager
@@ -544,7 +544,7 @@ class TestSimple(AiidaTestCase):
 
         from aiida.orm import load_node
         from aiida.orm.node import CalcJobNode
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.orm.importexport import export
         from aiida.common.links import LinkType
         from aiida.manage import get_manager
@@ -641,7 +641,7 @@ class TestSimple(AiidaTestCase):
         from aiida.common.links import LinkType
         from aiida.orm import load_node
         from aiida.orm.node import CalcJobNode
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.orm.importexport import export
         from aiida.orm.querybuilder import QueryBuilder
 
@@ -705,7 +705,7 @@ class TestSimple(AiidaTestCase):
         import tempfile
 
         from aiida.orm import load_node
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.orm.importexport import export
         from aiida.orm.querybuilder import QueryBuilder
 
@@ -761,7 +761,7 @@ class TestSimple(AiidaTestCase):
         import tempfile
 
         from aiida.orm.groups import Group
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.orm.importexport import export
         from aiida.orm.querybuilder import QueryBuilder
 
@@ -819,7 +819,7 @@ class TestSimple(AiidaTestCase):
     def test_calcfunction_1(self):
         import shutil, os, tempfile
         from aiida.work import calcfunction
-        from aiida.orm.data.float import Float
+        from aiida.orm.nodes.data.float import Float
         from aiida.orm import load_node
         from aiida.orm.importexport import export
         from aiida.common.exceptions import NotExistent
@@ -865,7 +865,7 @@ class TestSimple(AiidaTestCase):
         import shutil, os, tempfile
 
         from aiida.orm.node import WorkChainNode
-        from aiida.orm.data.int import Int
+        from aiida.orm.nodes.data.int import Int
         from aiida.orm import load_node
         from aiida.common.links import LinkType
         from aiida.orm.importexport import export
@@ -915,8 +915,8 @@ class TestSimple(AiidaTestCase):
         from datetime import datetime
 
         from aiida.orm import load_node, Group
-        from aiida.orm.data.array import ArrayData
-        from aiida.orm.data.parameter import ParameterData
+        from aiida.orm.nodes.data.array import ArrayData
+        from aiida.orm.nodes.data.parameter import ParameterData
         from aiida.orm.node import CalculationNode
         from aiida.orm.querybuilder import QueryBuilder
         from aiida.orm.importexport import export
@@ -1036,9 +1036,9 @@ class TestComplex(AiidaTestCase):
         import os
 
         from aiida.orm.node import CalcJobNode
-        from aiida.orm.data.folder import FolderData
-        from aiida.orm.data.parameter import ParameterData
-        from aiida.orm.data.remote import RemoteData
+        from aiida.orm.nodes.data.folder import FolderData
+        from aiida.orm.nodes.data.parameter import ParameterData
+        from aiida.orm.nodes.data.remote import RemoteData
         from aiida.common.links import LinkType
         from aiida.orm.importexport import export, import_data
         from aiida.orm.utils import load_node
@@ -1590,7 +1590,7 @@ class TestLinks(AiidaTestCase):
         """
         import os, shutil, tempfile
 
-        from aiida.orm.data.int import Int
+        from aiida.orm.nodes.data.int import Int
         from aiida.orm.importexport import export
         from aiida.orm.node import CalculationNode
         from aiida.common.links import LinkType
@@ -1629,7 +1629,7 @@ class TestLinks(AiidaTestCase):
         but also the final expected set of nodes (after adding the expected
         predecessors, desuccessors).
         """
-        from aiida.orm.data.base import Int
+        from aiida.orm.nodes.data.base import Int
         from aiida.orm.node import CalcJobNode
         from aiida.orm.node import WorkChainNode
         from aiida.common.links import LinkType
@@ -1707,7 +1707,7 @@ class TestLinks(AiidaTestCase):
         import tempfile
 
         from aiida.orm import Data, Group
-        from aiida.orm.data.base import Int
+        from aiida.orm.nodes.data.base import Int
         from aiida.orm.node import CalcJobNode
         from aiida.orm.importexport import export
         from aiida.common.links import LinkType
@@ -1845,7 +1845,7 @@ class TestLinks(AiidaTestCase):
         """
         import os, shutil, tempfile
         from aiida.orm import Node
-        from aiida.orm.data.base import Int
+        from aiida.orm.nodes.data.base import Int
         from aiida.orm.importexport import export
         from aiida.orm.node import CalculationNode, WorkflowNode
         from aiida.common.links import LinkType
@@ -1928,7 +1928,7 @@ class TestLinks(AiidaTestCase):
         """
         import os, shutil, tempfile
 
-        from aiida.orm.data.base import Int
+        from aiida.orm.nodes.data.base import Int
         from aiida.orm.importexport import export
         from aiida.orm.node import WorkChainNode
         from aiida.common.links import LinkType
@@ -1976,7 +1976,7 @@ class TestLinks(AiidaTestCase):
         """
         import os, shutil, tempfile
 
-        from aiida.orm.data.base import Int
+        from aiida.orm.nodes.data.base import Int
         from aiida.orm.importexport import export
         from aiida.orm.node import WorkChainNode
         from aiida.common.links import LinkType

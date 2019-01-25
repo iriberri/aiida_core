@@ -13,10 +13,10 @@ from __future__ import absolute_import
 
 from aiida.backends.testbase import AiidaTestCase
 from aiida.orm import CalculationFactory
-from aiida.orm.data.parameter import ParameterData
-from aiida.orm.data.bool import Bool
-from aiida.orm.data.float import Float
-from aiida.orm.data.int import Int
+from aiida.orm.nodes.data.parameter import ParameterData
+from aiida.orm.nodes.data.bool import Bool
+from aiida.orm.nodes.data.float import Float
+from aiida.orm.nodes.data.int import Int
 from aiida.work import WorkChain, Process
 
 DEFAULT_INT = 256

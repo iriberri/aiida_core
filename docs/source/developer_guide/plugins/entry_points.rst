@@ -141,7 +141,7 @@ Usage::
 ``aiida.data``
 --------------
 
-Group for :py:class:`~aiida.orm.data.Data` subclasses. Previously located in a subpackage of ``aiida/orm/data``.
+Group for :py:class:`~aiida.orm.nodes.data.Data` subclasses. 
 
 Spec::
 

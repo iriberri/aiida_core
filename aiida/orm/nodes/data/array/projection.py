@@ -17,9 +17,9 @@ from six.moves import range
 import numpy as np
 
 from aiida.orm import load_node
-from aiida.orm.data.array import ArrayData
-from aiida.orm.data.orbital import OrbitalData
-from aiida.orm.data.array.bands import BandsData
+from aiida.orm.nodes.data.array import ArrayData
+from aiida.orm.nodes.data.orbital import OrbitalData
+from aiida.orm.nodes.data.array.bands import BandsData
 from aiida.common.exceptions import ValidationError, NotExistent
 
 

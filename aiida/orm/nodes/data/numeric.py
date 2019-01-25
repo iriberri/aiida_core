@@ -10,10 +10,11 @@
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
-from aiida.orm.data import to_aiida_type, BaseType
+from aiida.orm.nodes.data import to_aiida_type, BaseType
 
 
 def _left_operator(func):
+
     def inner(self, other):
         l = self.value
         if isinstance(other, NumericType):
@@ -21,21 +22,25 @@ def _left_operator(func):
         else:
             r = other
         return to_aiida_type(func(l, r))
+
     return inner
 
 
 def _right_operator(func):
+
     def inner(self, other):
         assert not isinstance(other, NumericType)
         return to_aiida_type(func(self.value, other))
+
     return inner
 
 
 class NumericType(BaseType):
     """
-    Specific subclass of :py:class:`aiida.orm.data.BaseType` to store numbers,
+    Specific subclass of :py:class:`aiida.orm.nodes.data.BaseType` to store numbers,
     overloading common operators (``+``, ``*``, ...)
     """
+
     @_left_operator
     def __add__(self, other):
         return self + other
@@ -62,7 +67,7 @@ class NumericType(BaseType):
 
     @_left_operator
     def __pow__(self, power):
-        return self ** power
+        return self**power
 
     @_left_operator
     def __lt__(self, other):

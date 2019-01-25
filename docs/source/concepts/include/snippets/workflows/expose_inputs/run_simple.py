@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from aiida.orm.data.bool import Bool
-from aiida.orm.data.float import Float
-from aiida.orm.data.int import Int
+from aiida.orm.nodes.data.bool import Bool
+from aiida.orm.nodes.data.float import Float
+from aiida.orm.nodes.data.int import Int
 from aiida.work import run
 from simple_parent import SimpleParentWorkChain
 

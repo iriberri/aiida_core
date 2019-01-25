@@ -18,6 +18,7 @@ from __future__ import absolute_import
 
 __all__ = ('NodeInputManager', 'NodeOutputManager', 'AttributeManager')
 
+
 class NodeInputManager(object):  # pylint: disable=too-few-public-methods
     """
     A manager that allows to do node.inp.xxx to get the input named 'xxx'
@@ -50,9 +51,7 @@ class NodeInputManager(object):  # pylint: disable=too-few-public-methods
         try:
             return self._node.get_incoming().get_node_by_label(name)
         except KeyError:
-            raise AttributeError(
-                "Node '{}' does not have an input with link '{}'".format(
-                    self._node.pk, name))
+            raise AttributeError("Node '{}' does not have an input with link '{}'".format(self._node.pk, name))
 
     def __getitem__(self, name):
         """
@@ -63,11 +62,10 @@ class NodeInputManager(object):  # pylint: disable=too-few-public-methods
         try:
             return self._node.get_incoming().get_node_by_label(name)
         except KeyError:
-            raise KeyError("Node '{}' does not have an input with link '{}'"
-                           .format(self._node.pk, name))
+            raise KeyError("Node '{}' does not have an input with link '{}'".format(self._node.pk, name))
 
 
-class NodeOutputManager(object): # pylint: disable=too-few-public-methods
+class NodeOutputManager(object):  # pylint: disable=too-few-public-methods
     """
     A manager that allows to do node.out.xxx to get the output named 'xxx'
     of a given node.
@@ -99,8 +97,7 @@ class NodeOutputManager(object): # pylint: disable=too-few-public-methods
         try:
             return self._node.get_outgoing().get_node_by_label(name)
         except KeyError:
-            raise AttributeError("Node {} does not have an output with link {}"
-                                 .format(self._node.pk, name))
+            raise AttributeError("Node {} does not have an output with link {}".format(self._node.pk, name))
 
     def __getitem__(self, name):
         """
@@ -111,14 +108,13 @@ class NodeOutputManager(object): # pylint: disable=too-few-public-methods
         try:
             return self._node.get_outgoing().get_node_by_label(name)
         except KeyError:
-            raise KeyError("Node {} does not have an output with link {}"
-                           .format(self._node.pk, name))
+            raise KeyError("Node {} does not have an output with link {}".format(self._node.pk, name))
 
 
 class AttributeManager(object):  # pylint: disable=too-few-public-methods
     """
     An object used internally to return the attributes as a dictionary.
-    This is currently used in :py:class:`~aiida.orm.data.parameter.ParameterData`,
+    This is currently used in :py:class:`~aiida.orm.nodes.data.parameter.ParameterData`,
     for instance.
 
     :note: Important! It cannot be used to change variables, just to read

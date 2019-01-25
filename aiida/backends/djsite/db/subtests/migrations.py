@@ -90,8 +90,8 @@ class TestDuplicateNodeUuidMigration(TestMigrations):
     migrate_to = '0014_add_node_uuid_unique_constraint'
 
     def setUpBeforeMigration(self, apps):
-        from aiida.orm.data.bool import Bool
-        from aiida.orm.data.int import Int
+        from aiida.orm.nodes.data.bool import Bool
+        from aiida.orm.nodes.data.int import Int
 
         self.file_name = 'test.temp'
         self.file_content = '#!/bin/bash\n\necho test run\n'

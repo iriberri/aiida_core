@@ -22,7 +22,7 @@ def load_node_class(type_string):
     :param type_string: the `type` string of the node
     :return: a sub class of `Node`
     """
-    from aiida.orm.data import Data
+    from aiida.orm.nodes.data import Data
     from aiida.plugins.entry_point import load_entry_point
 
     if not type_string.endswith('.'):
@@ -59,7 +59,7 @@ def load_backend_node_class(type_string):
     :param type_string: the `type` string of the node
     :return: a sub class of `Node`
     """
-    from aiida.orm.data import Data
+    from aiida.orm.nodes.data import Data
     from aiida.plugins.entry_point import load_entry_point
 
     # Get the second element of type_string
@@ -137,11 +137,14 @@ def get_type_string_from_class(class_module, class_name):
     for prefix in prefixes:
         type_string = strip_prefix(type_string, prefix)
 
-    # This needs to be here as long as `aiida.orm.data` does not live in `aiida.orm.node.data` because all the `Data`
+    # This needs to be here as long as `aiida.orm.data` is not fully migated under `aiida.orm.nodes.data` because all the `Data`
     # instances will have a type string that starts with `data.` instead of `node.`, so in order to match any `Node`
     # we have to look for any type string essentially.
     if type_string == 'node.Node.':
         type_string = ''
+
+    if type_string.startswith('nodes.data.'):
+        type_string = 'data.' + strip_prefix(type_string, 'nodes.data.')
 
     return type_string
 
@@ -182,7 +185,7 @@ def clean_value(value):
         values replaced where needed.
     """
     # Must be imported in here to avoid recursive imports
-    from aiida.orm.data import BaseType
+    from aiida.orm.nodes.data import BaseType
 
     def clean_builtin(val):
         """

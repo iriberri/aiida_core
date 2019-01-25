@@ -24,7 +24,7 @@ class TestQueryBuilderDjango(AiidaTestCase):
             DbGroup,
         )
         from aiida.orm.querybuilder import QueryBuilder
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.orm import Group, Node, Computer, Data
         from aiida.common.exceptions import DbContentError
         qb = QueryBuilder()

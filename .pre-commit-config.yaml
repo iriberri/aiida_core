@@ -113,8 +113,8 @@
         aiida/backends/tests/generic.py|
         aiida/backends/tests/__init__.py|
         aiida/backends/tests/nodes.py|
-        aiida/backends/tests/orm/data/frozendict.py|
-        aiida/backends/tests/orm/data/remote.py|
+        aiida/backends/tests/orm/nodes/data/frozendict.py|
+        aiida/backends/tests/orm/nodes/data/remote.py|
         aiida/backends/tests/orm/utils/loaders.py|
         aiida/backends/tests/parsers.py|
         aiida/backends/tests/query.py|
@@ -147,28 +147,28 @@
         aiida/orm/backend.py|
         aiida/orm/querybuilder.py|
         aiida/orm/code.py|
-        aiida/orm/data/array/bands.py|
-        aiida/orm/data/array/kpoints.py|
-        aiida/orm/data/array/projection.py|
-        aiida/orm/data/array/xy.py|
-        aiida/orm/data/base.py|
-        aiida/orm/data/bool.py|
-        aiida/orm/data/error.py|
-        aiida/orm/data/float.py|
-        aiida/orm/data/folder.py|
-        aiida/orm/data/frozendict.py|
-        aiida/orm/data/__init__.py|
-        aiida/orm/data/int.py|
-        aiida/orm/data/list.py|
-        aiida/orm/data/code.py|
-        aiida/orm/data/numeric.py|
-        aiida/orm/data/orbital.py|
-        aiida/orm/data/parameter.py|
-        aiida/orm/data/remote.py|
-        aiida/orm/data/singlefile.py|
-        aiida/orm/data/str.py|
-        aiida/orm/data/structure.py|
-        aiida/orm/data/upf.py|
+        aiida/orm/nodes/data/array/bands.py|
+        aiida/orm/nodes/data/array/kpoints.py|
+        aiida/orm/nodes/data/array/projection.py|
+        aiida/orm/nodes/data/array/xy.py|
+        aiida/orm/nodes/data/base.py|
+        aiida/orm/nodes/data/bool.py|
+        aiida/orm/nodes/data/error.py|
+        aiida/orm/nodes/data/float.py|
+        aiida/orm/nodes/data/folder.py|
+        aiida/orm/nodes/data/frozendict.py|
+        aiida/orm/nodes/data/__init__.py|
+        aiida/orm/nodes/data/int.py|
+        aiida/orm/nodes/data/list.py|
+        aiida/orm/nodes/data/code.py|
+        aiida/orm/nodes/data/numeric.py|
+        aiida/orm/nodes/data/orbital.py|
+        aiida/orm/nodes/data/parameter.py|
+        aiida/orm/nodes/data/remote.py|
+        aiida/orm/nodes/data/singlefile.py|
+        aiida/orm/nodes/data/str.py|
+        aiida/orm/nodes/data/structure.py|
+        aiida/orm/nodes/data/upf.py|
         aiida/orm/group.py|
         aiida/orm/implementation/calculation.py|
         aiida/orm/implementation/django/authinfo.py|

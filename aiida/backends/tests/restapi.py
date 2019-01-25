@@ -19,7 +19,7 @@ from aiida.common.links import LinkType
 from aiida.orm import DataFactory
 from aiida.orm.node import CalcJobNode
 from aiida.orm.computers import Computer
-from aiida.orm.data import Data
+from aiida.orm.nodes.data import Data
 from aiida.orm.querybuilder import QueryBuilder
 from aiida.restapi.api import App, AiidaApi
 import aiida.common.json as json

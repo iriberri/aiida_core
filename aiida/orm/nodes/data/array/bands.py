@@ -22,7 +22,7 @@ import six
 from six.moves import range, zip
 import numpy
 
-from aiida.orm.data.array.kpoints import KpointsData
+from aiida.orm.nodes.data.array.kpoints import KpointsData
 from aiida.common.exceptions import ValidationError
 from aiida.common.utils import prettify_labels, join_labels
 
@@ -387,7 +387,7 @@ class BandsData(KpointsData):
         validate the pbc, then store them
         """
         from aiida.common.exceptions import ModificationNotAllowed
-        from aiida.orm.data.structure import get_valid_pbc
+        from aiida.orm.nodes.data.structure import get_valid_pbc
 
         if self.is_stored:
             raise ModificationNotAllowed(
@@ -860,7 +860,7 @@ class BandsData(KpointsData):
         Prepare a python script using matplotlib to plot the bands
 
         For the possible parameters, see documentation of
-        :py:meth:`~aiida.orm.data.array.bands.BandsData._matplotlib_get_dict`
+        :py:meth:`~aiida.orm.nodes.data.array.bands.BandsData._matplotlib_get_dict`
         """
         import aiida.common.json as json
 
@@ -882,7 +882,7 @@ class BandsData(KpointsData):
         returned as an independent file.
 
         For the possible parameters, see documentation of
-        :py:meth:`~aiida.orm.data.array.bands.BandsData._matplotlib_get_dict`
+        :py:meth:`~aiida.orm.nodes.data.array.bands.BandsData._matplotlib_get_dict`
         """
         import os
        
@@ -1018,7 +1018,7 @@ class BandsData(KpointsData):
         returned as an independent file.
 
         For the possible parameters, see documentation of
-        :py:meth:`~aiida.orm.data.array.bands.BandsData._matplotlib_get_dict`
+        :py:meth:`~aiida.orm.nodes.data.array.bands.BandsData._matplotlib_get_dict`
         """
         import os
         import tempfile
@@ -1075,7 +1075,7 @@ class BandsData(KpointsData):
         returned as an independent file.
 
         For the possible parameters, see documentation of
-        :py:meth:`~aiida.orm.data.array.bands.BandsData._matplotlib_get_dict`
+        :py:meth:`~aiida.orm.nodes.data.array.bands.BandsData._matplotlib_get_dict`
         """
         import json
         import os

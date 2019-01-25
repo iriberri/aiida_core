@@ -33,7 +33,7 @@ class TestQueryBuilder(AiidaTestCase):
         This tests the classifications of the QueryBuilder
         """
         from aiida.orm.querybuilder import QueryBuilder
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.orm import Group, User, Node, Computer, Data
         from aiida.common.exceptions import DbContentError
 
@@ -284,8 +284,8 @@ class TestQueryBuilder(AiidaTestCase):
         self.assertEqual(QueryBuilder().append(Node, filters={'attributes.fa': {'>=': 1.02}}).count(), 5)
 
     def test_subclassing(self):
-        from aiida.orm.data.structure import StructureData
-        from aiida.orm.data.parameter import ParameterData
+        from aiida.orm.nodes.data.structure import StructureData
+        from aiida.orm.nodes.data.parameter import ParameterData
         from aiida.orm import Node, Data
         from aiida.orm.querybuilder import QueryBuilder
         s = StructureData()
@@ -364,7 +364,7 @@ class TestQueryBuilder(AiidaTestCase):
 
     def test_append_validation(self):
         from aiida.orm.querybuilder import QueryBuilder
-        from aiida.orm.data.structure import StructureData
+        from aiida.orm.nodes.data.structure import StructureData
         from aiida.common.exceptions import InputValidationError
         from aiida.orm.node import ProcessNode
 
@@ -407,8 +407,8 @@ class TestQueryBuilder(AiidaTestCase):
         from aiida.orm.querybuilder import QueryBuilder
         from aiida.orm.node import Node
         from aiida.orm.node import ProcessNode
-        from aiida.orm.data.structure import StructureData
-        from aiida.orm.data.parameter import ParameterData
+        from aiida.orm.nodes.data.structure import StructureData
+        from aiida.orm.nodes.data.parameter import ParameterData
         from aiida.orm.computers import Computer
         qb = QueryBuilder()
         qb.append(Node, tag='n1')
@@ -445,9 +445,9 @@ class TestQueryHelp(AiidaTestCase):
         I also check passing of tuples.
         """
 
-        from aiida.orm.data.structure import StructureData
-        from aiida.orm.data.parameter import ParameterData
-        from aiida.orm.data import Data
+        from aiida.orm.nodes.data.structure import StructureData
+        from aiida.orm.nodes.data.parameter import ParameterData
+        from aiida.orm.nodes.data import Data
         from aiida.orm.querybuilder import QueryBuilder
         from aiida.orm.groups import Group
         from aiida.orm.computers import Computer

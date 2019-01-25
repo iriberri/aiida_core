@@ -10,20 +10,18 @@
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
-
-import six
-
-from aiida.orm.data import BaseType
-from aiida.orm.data import to_aiida_type
+import numbers
+from aiida.orm.nodes.data import to_aiida_type
+from aiida.orm.nodes.data.numeric import NumericType
 
 
-class Str(BaseType):
+class Float(NumericType):
     """
-    Class to store strings as AiiDA nodes
+    Class to store float numbers as AiiDA nodes
     """
-    _type = str
+    _type = float
 
 
-@to_aiida_type.register(six.string_types[0])
+@to_aiida_type.register(numbers.Real)
 def _(value):
-    return Str(value)
+    return Float(value)

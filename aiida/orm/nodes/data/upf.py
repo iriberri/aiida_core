@@ -20,20 +20,17 @@ import six
 
 import aiida.orm.users
 from aiida.common.lang import classproperty
-from aiida.orm.data.singlefile import SinglefileData
+from aiida.orm.nodes.data.singlefile import SinglefileData
 from aiida.orm import GroupTypeString
-
 
 UPFGROUP_TYPE = GroupTypeString.UPFGROUP_TYPE
 
-_upfversion_regexp = re.compile(
-    r"""
+_upfversion_regexp = re.compile(r"""
     \s*<UPF\s+version\s*="
        (?P<version>.*)">
    """, re.VERBOSE)
 
-_element_v1_regexp = re.compile(
-    r"""
+_element_v1_regexp = re.compile(r"""
     (?P<element_name>[a-zA-Z]{1,2})
     \s+
     Element
@@ -66,9 +63,8 @@ def get_pseudos_from_structure(structure, family_name):
     for node in family.nodes:
         if isinstance(node, UpfData):
             if node.element in family_pseudos:
-                raise MultipleObjectsError(
-                    "More than one UPF for element {} found in "
-                    "family {}".format(node.element, family_name))
+                raise MultipleObjectsError("More than one UPF for element {} found in "
+                                           "family {}".format(node.element, family_name))
             family_pseudos[node.element] = node
 
     pseudo_list = {}
@@ -77,8 +73,7 @@ def get_pseudos_from_structure(structure, family_name):
         try:
             pseudo_list[kind.name] = family_pseudos[symbol]
         except KeyError:
-            raise NotExistent("No UPF for element {} found in family {}".format(
-                symbol, family_name))
+            raise NotExistent("No UPF for element {} found in family {}".format(symbol, family_name))
 
     return pseudo_list
 
@@ -116,8 +111,7 @@ def get_pseudos_dict(structure, family_name):
     return pseudos
 
 
-def upload_upf_family(folder, group_label, group_description,
-                      stop_if_existing=True):
+def upload_upf_family(folder, group_label, group_description, stop_if_existing=True):
     """
     Upload a set of UPF files in a given group.
 
@@ -142,22 +136,22 @@ def upload_upf_family(folder, group_label, group_description,
 
     # only files, and only those ending with .upf or .UPF;
     # go to the real file if it is a symlink
-    files = [os.path.realpath(os.path.join(folder, i))
-             for i in os.listdir(folder) if
-             os.path.isfile(os.path.join(folder, i)) and
-             i.lower().endswith('.upf')]
+    files = [
+        os.path.realpath(os.path.join(folder, i))
+        for i in os.listdir(folder)
+        if os.path.isfile(os.path.join(folder, i)) and i.lower().endswith('.upf')
+    ]
 
     nfiles = len(files)
 
     automatic_user = orm.User.objects.get_default()
-    group, group_created = orm.Group.objects.get_or_create(label=group_label, type_string=UPFGROUP_TYPE,
-                                                           user=automatic_user)
+    group, group_created = orm.Group.objects.get_or_create(
+        label=group_label, type_string=UPFGROUP_TYPE, user=automatic_user)
 
     if group.user.email != automatic_user.email:
         raise UniquenessError("There is already a UpfFamily group with label {}"
                               ", but it belongs to user {}, therefore you "
-                              "cannot modify it".format(group_label,
-                                                        group.user.email))
+                              "cannot modify it".format(group_label, group.user.email))
 
     # Always update description, even if the group already existed
     group.description = group_description
@@ -174,18 +168,15 @@ def upload_upf_family(folder, group_label, group_description,
 
         if existing_upf is None:
             # return the upfdata instances, not stored
-            pseudo, created = UpfData.get_or_create(f, use_first=True,
-                                                    store_upf=False)
+            pseudo, created = UpfData.get_or_create(f, use_first=True, store_upf=False)
             # to check whether only one upf per element exists
             # NOTE: actually, created has the meaning of "to_be_created"
             pseudo_and_created.append((pseudo, created))
         else:
             if stop_if_existing:
-                raise ValueError(
-                    "A UPF with identical MD5 to "
-                    " {} cannot be added with stop_if_existing"
-                    "".format(f)
-                )
+                raise ValueError("A UPF with identical MD5 to "
+                                 " {} cannot be added with stop_if_existing"
+                                 "".format(f))
             existing_upf = existing_upf[0]
             pseudo_and_created.append((existing_upf, False))
 
@@ -205,11 +196,9 @@ def upload_upf_family(folder, group_label, group_description,
     elements_names = [e[0] for e in elements]
 
     if not len(elements_names) == len(set(elements_names)):
-        duplicates = set([x for x in elements_names
-                          if elements_names.count(x) > 1])
+        duplicates = set([x for x in elements_names if elements_names.count(x) > 1])
         duplicates_string = ", ".join(i for i in duplicates)
-        raise UniquenessError("More than one UPF found for the elements: " +
-                              duplicates_string + ".")
+        raise UniquenessError("More than one UPF found for the elements: " + duplicates_string + ".")
 
         # At this point, save the group, if still unstored
     if group_created:
@@ -220,11 +209,9 @@ def upload_upf_family(folder, group_label, group_description,
         if created:
             pseudo.store()
 
-            AIIDA_LOGGER.debug("New node {} created for file {}".format(
-                pseudo.uuid, pseudo.filename))
+            AIIDA_LOGGER.debug("New node {} created for file {}".format(pseudo.uuid, pseudo.filename))
         else:
-            AIIDA_LOGGER.debug("Reusing node {} for file {}".format(
-                pseudo.uuid, pseudo.filename))
+            AIIDA_LOGGER.debug("Reusing node {} for file {}".format(pseudo.uuid, pseudo.filename))
 
     # Add elements to the group all togetehr
     group.add_nodes(pseudo for pseudo, created in pseudo_and_created)
@@ -248,7 +235,7 @@ def parse_upf(fname, check_filename=True):
     from aiida.common.exceptions import ParsingError
     from aiida.common import AIIDA_LOGGER
     # TODO: move these data in a 'chemistry' module
-    from aiida.orm.data.structure import _valid_symbols
+    from aiida.orm.nodes.data.structure import _valid_symbols
 
     parsed_data = {}
 
@@ -258,8 +245,7 @@ def parse_upf(fname, check_filename=True):
     match = _upfversion_regexp.search(upf_contents)
     if match:
         version = match.group('version')
-        AIIDA_LOGGER.debug("Version found: {} for file {}".format(
-            version, fname))
+        AIIDA_LOGGER.debug("Version found: {} for file {}".format(version, fname))
     else:
         AIIDA_LOGGER.debug("Assuming version 1 for file {}".format(fname))
         version = "1"
@@ -271,8 +257,7 @@ def parse_upf(fname, check_filename=True):
         # If the version string does not contain a dot, fallback
         # to version 1
         AIIDA_LOGGER.debug("Falling back to version 1 for file {}, "
-                           "version string '{}' unrecognized".format(
-            fname, version))
+                           "version string '{}' unrecognized".format(fname, version))
         version_major = 1
 
     element = None
@@ -286,15 +271,12 @@ def parse_upf(fname, check_filename=True):
             element = match.group('element_name')
 
     if element is None:
-        raise ParsingError("Unable to find the element of UPF {}".format(
-            fname))
+        raise ParsingError("Unable to find the element of UPF {}".format(fname))
     element = element.capitalize()
     if element not in _valid_symbols:
-        raise ParsingError("Unknown element symbol {} for file {}".format(
-            element, fname))
+        raise ParsingError("Unknown element symbol {} for file {}".format(element, fname))
     if check_filename:
-        if not os.path.basename(fname).lower().startswith(
-                element.lower()):
+        if not os.path.basename(fname).lower().startswith(element.lower()):
             raise ParsingError("Filename {0} was recognized for element "
                                "{1}, but the filename does not start "
                                "with {1}".format(fname, element))
@@ -347,8 +329,7 @@ class UpfData(SinglefileData):
                 else:
                     raise ValueError("More than one copy of a pseudopotential "
                                      "with the same MD5 has been found in the "
-                                     "DB. pks={}".format(
-                        ",".join([str(i.pk) for i in pseudos])))
+                                     "DB. pks={}".format(",".join([str(i.pk) for i in pseudos])))
             else:
                 return (pseudos[0], False)
 
@@ -377,8 +358,7 @@ class UpfData(SinglefileData):
         try:
             element = parsed_data['element']
         except KeyError:
-            raise ParsingError("No 'element' parsed in the UPF file {};"
-                               " unable to store".format(self.filename))
+            raise ParsingError("No 'element' parsed in the UPF file {};" " unable to store".format(self.filename))
 
         self._set_attr('element', str(element))
         self._set_attr('md5', md5sum)
@@ -411,8 +391,7 @@ class UpfData(SinglefileData):
         try:
             element = parsed_data['element']
         except KeyError:
-            raise ParsingError("No 'element' parsed in the UPF file {};"
-                               " unable to store".format(self.filename))
+            raise ParsingError("No 'element' parsed in the UPF file {};" " unable to store".format(self.filename))
 
         super(UpfData, self).set_file(filename)
 
@@ -425,9 +404,9 @@ class UpfData(SinglefileData):
         from aiida.orm import QueryBuilder
 
         query = QueryBuilder()
-        query.append(Group, filters={'type':{'==':self.upffamily_type_string}}, tag='group', project='name')
-        query.append(UpfData, filters={'id': {'==':self.id}}, with_group='group')
-        return [ _[0] for _ in query.all()]
+        query.append(Group, filters={'type': {'==': self.upffamily_type_string}}, tag='group', project='name')
+        query.append(UpfData, filters={'id': {'==': self.id}}, with_group='group')
+        return [_[0] for _ in query.all()]
 
     @property
     def element(self):
@@ -450,15 +429,13 @@ class UpfData(SinglefileData):
         try:
             parsed_data = parse_upf(upf_abspath)
         except ParsingError:
-            raise ValidationError("The file '{}' could not be "
-                                  "parsed".format(upf_abspath))
+            raise ValidationError("The file '{}' could not be " "parsed".format(upf_abspath))
         md5 = aiida.common.files.md5_file(upf_abspath)
 
         try:
             element = parsed_data['element']
         except KeyError:
-            raise ValidationError("No 'element' could be parsed in the UPF "
-                                  "file {}".format(upf_abspath))
+            raise ValidationError("No 'element' could be parsed in the UPF " "file {}".format(upf_abspath))
 
         try:
             attr_element = self.get_attr('element')
@@ -472,13 +449,10 @@ class UpfData(SinglefileData):
 
         if attr_element != element:
             raise ValidationError("Attribute 'element' says '{}' but '{}' was "
-                                  "parsed instead.".format(
-                attr_element, element))
+                                  "parsed instead.".format(attr_element, element))
 
         if attr_md5 != md5:
-            raise ValidationError("Attribute 'md5' says '{}' but '{}' was "
-                                  "parsed instead.".format(
-                attr_md5, md5))
+            raise ValidationError("Attribute 'md5' says '{}' but '{}' was " "parsed instead.".format(attr_md5, md5))
 
     @classmethod
     def get_upf_group(cls, group_label):
@@ -512,14 +486,14 @@ class UpfData(SinglefileData):
         query.append(Group, filters=filters, tag='group', project='*')
 
         if user:
-            query.append(User, filters={'email':{'==':user}}, with_group='group')
+            query.append(User, filters={'email': {'==': user}}, with_group='group')
 
         if isinstance(filter_elements, six.string_types):
             filter_elements = [filter_elements]
 
         if filter_elements is not None:
             actual_filter_elements = [_ for _ in filter_elements]
-            query.append(UpfData, filters={'attributes.element':{'in': filter_elements}}, with_group='group')
+            query.append(UpfData, filters={'attributes.element': {'in': filter_elements}}, with_group='group')
 
-        query.order_by({Group:{'id':'asc'}}) 
+        query.order_by({Group: {'id': 'asc'}})
         return [_[0] for _ in query.all()]

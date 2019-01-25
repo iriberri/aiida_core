@@ -689,11 +689,11 @@ def ase_refine_cell(aseatoms, **kwargs):
 @calcfunction
 def _get_cif_ase_inline(struct, parameters):
     """
-    Creates :py:class:`aiida.orm.data.cif.CifData` using ASE.
+    Creates :py:class:`aiida.orm.nodes.data.cif.CifData` using ASE.
 
     .. note:: requires ASE module.
     """
-    from aiida.orm.data.cif import CifData
+    from aiida.orm.nodes.data.cif import CifData
 
     kwargs = {}
     if parameters is not None:
@@ -1021,7 +1021,7 @@ class StructureData(Data):
         """
         Write the given structure to a string of format CIF.
         """
-        from aiida.orm.data.cif import CifData
+        from aiida.orm.nodes.data.cif import CifData
 
         cif = CifData(ase=self.get_ase())
         return cif._prepare_cif()
@@ -1310,7 +1310,7 @@ class StructureData(Data):
         Requires to be able to import ase.
 
         :return: an ASE object corresponding to this
-          :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+          :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
           object.
 
         .. note:: If any site is an alloy or has vacancies, a ValueError
@@ -1353,7 +1353,7 @@ class StructureData(Data):
             of earlier versions may cause errors).
 
         :return: a pymatgen Structure object corresponding to this
-          :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+          :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
           object.
         :raise ValueError: if periodic boundary conditions do not hold
           in at least one dimension of real space.
@@ -1368,7 +1368,7 @@ class StructureData(Data):
             of earlier versions may cause errors).
 
         :return: a pymatgen Molecule object corresponding to this
-          :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+          :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
           object.
         """
         return self._get_object_pymatgen_molecule()
@@ -1376,7 +1376,7 @@ class StructureData(Data):
     def append_kind(self, kind):
         """
         Append a kind to the
-        :py:class:`StructureData <aiida.orm.data.structure.StructureData>`.
+        :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`.
         It makes a copy of the kind.
 
         :param kind: the site to append, must be a Kind object.
@@ -1406,7 +1406,7 @@ class StructureData(Data):
     def append_site(self, site):
         """
         Append a site to the
-        :py:class:`StructureData <aiida.orm.data.structure.StructureData>`.
+        :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`.
         It makes a copy of the site.
 
         :param site: the site to append. It must be a Site object.
@@ -1458,7 +1458,7 @@ class StructureData(Data):
               until an unique name is found
 
         .. note :: checks of equality of species are done using
-          the :py:meth:`~aiida.orm.data.structure.Kind.compare_with` method.
+          the :py:meth:`~aiida.orm.nodes.data.structure.Kind.compare_with` method.
         """
         aseatom = kwargs.pop('ase', None)
         if aseatom is not None:
@@ -1883,14 +1883,14 @@ class StructureData(Data):
 
     def _get_cif(self, converter='ase', store=False, **kwargs):
         """
-        Creates :py:class:`aiida.orm.data.cif.CifData`.
+        Creates :py:class:`aiida.orm.nodes.data.cif.CifData`.
 
         :param converter: specify the converter. Default 'ase'.
         :param store: If True, intermediate calculation gets stored in the
             AiiDA database for record. Default False.
-        :return: :py:class:`aiida.orm.data.cif.CifData` node.
+        :return: :py:class:`aiida.orm.nodes.data.cif.CifData` node.
         """
-        from aiida.orm.data.parameter import ParameterData
+        from aiida.orm.nodes.data.parameter import ParameterData
         from . import structure  # This same module
 
         param = ParameterData(dict=kwargs)
@@ -1920,7 +1920,7 @@ class StructureData(Data):
     def _get_object_ase(self):
         """
         Converts
-        :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+        :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
         to ase.Atoms
 
         :return: an ase.Atoms object
@@ -1937,7 +1937,7 @@ class StructureData(Data):
     def _get_object_pymatgen(self,**kwargs):
         """
         Converts
-        :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+        :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
         to pymatgen object
 
         :return: a pymatgen Structure for structures with periodic boundary
@@ -1954,7 +1954,7 @@ class StructureData(Data):
     def _get_object_pymatgen_structure(self,**kwargs):
         """
         Converts
-        :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+        :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
         to pymatgen Structure object
         :param add_spin: True to add the spins to the pymatgen structure.
         Default is False (no spin added).
@@ -1966,7 +1966,7 @@ class StructureData(Data):
             * if the kind name ends with 2 -> spin=-1
 
         :return: a pymatgen Structure object corresponding to this
-          :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+          :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
           object
         :raise ValueError: if periodic boundary conditions does not hold
           in at least one dimension of real space; if there are partial occupancies
@@ -2019,11 +2019,11 @@ class StructureData(Data):
     def _get_object_pymatgen_molecule(self,**kwargs):
         """
         Converts
-        :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+        :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
         to pymatgen Molecule object
 
         :return: a pymatgen Molecule object corresponding to this
-          :py:class:`StructureData <aiida.orm.data.structure.StructureData>`
+          :py:class:`StructureData <aiida.orm.nodes.data.structure.StructureData>`
           object.
 
         .. note:: Requires the pymatgen module (version >= 3.0.13, usage

@@ -17,9 +17,9 @@ from __future__ import absolute_import
 import re
 
 from aiida.work.workchain import WorkChain
-from aiida.orm.data.bool import Bool
-from aiida.orm.data.float import Float
-from aiida.orm.data.int import Int
+from aiida.orm.nodes.data.bool import Bool
+from aiida.orm.nodes.data.float import Float
+from aiida.orm.nodes.data.int import Int
 
 
 class DemoWorkChain(WorkChain):  # pylint: disable=abstract-method
