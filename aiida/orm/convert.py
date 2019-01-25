@@ -29,7 +29,7 @@ from aiida.orm.implementation.nodes import BackendNode
 from aiida.orm.implementation.nodes.process import BackendProcessNode
 from aiida.orm.implementation.nodes.process.calculation import BackendCalculationNode
 from aiida.orm.implementation.nodes.process.workflow import BackendWorkflowNode
-from aiida.orm.node import Node
+#from aiida.orm.nodes import Node
 
 
 ##################################################################

@@ -18,6 +18,7 @@ from .data import *
 from .data.code import Code
 
 from .authinfos import *
+from .comments import *
 from .computers import *
 from .entities import *
 from .groups import *
@@ -26,6 +27,7 @@ from .nodes import *
 from .querybuilder import *
 from .users import *
 from .utils import *
+
 
 # For legacy reasons support the singulars as well
 authinfo = authinfos
@@ -39,6 +41,7 @@ _local = 'Code', 'CalculationFactory', 'DataFactory', 'WorkflowFactory', \
 
 __all__ = (_local +
            authinfos.__all__ +
+           comments.__all__ +
            computers.__all__ +
            entities.__all__ +
            groups.__all__ +

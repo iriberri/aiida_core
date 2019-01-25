@@ -18,8 +18,8 @@ from aiida.backends.utils import validate_attribute_key
 from aiida.common import exceptions
 from aiida.common.folders import RepositoryFolder, SandboxFolder
 from aiida.common.lang import type_check
+from aiida.orm.implementation import backends
 from aiida.orm.utils.node import clean_value
-from . import backends
 
 __all__ = ('BackendNode', 'BackendNodeCollection', '_NO_DEFAULT')
 

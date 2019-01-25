@@ -30,16 +30,17 @@ from aiida.common.lang import combomethod, classproperty, type_check
 from aiida.common.escaping import sql_string_match
 from aiida.manage import get_manager
 from aiida.manage.caching import get_use_cache
+from aiida.orm import comments
+from aiida.orm import convert
+from aiida.orm import entities
+from aiida.orm import groups
+from aiida.orm import computers
+from aiida.orm import querybuilder
+from aiida.orm import users
 from aiida.orm.utils.node import AbstractNodeMeta
 from aiida.orm.utils.managers import NodeInputManager, NodeOutputManager
 from aiida.orm.implementation.nodes import _NO_DEFAULT
-from . import comments
-from . import convert
-from . import entities
-from . import groups
-from . import computers
-from . import querybuilder
-from . import users
+
 
 __all__ = ('Node',)
 
@@ -96,6 +97,7 @@ class Node(entities.Entity):
 
     @classmethod
     def from_backend_entity(cls, backend_entity):
+        """ TODO: Doc me """
         entity = super(Node, cls).from_backend_entity(backend_entity)
         entity._repo_folder = RepositoryFolder(section=entity._section_name, uuid=entity.uuid)
         # Set the internal parameters
@@ -501,7 +503,7 @@ class Node(entities.Entity):
         No .store() to be called.
         Can be used *only* after saving.
 
-        :param the_dict: a dictionary of key:value to be set as extras        
+        :param the_dict: a dictionary of key:value to be set as extras
         :param exclusive: (default=False).
             If exclusive is True, it raises a UniquenessError if an Extra with
             the same name already exists in the DB (useful e.g. to "lock" a
@@ -604,7 +606,7 @@ class Node(entities.Entity):
 
         :return: the list of comments, sorted by pk
         """
-        self._backend_entity.get_comment(identifier)
+        self._backend_entity.get_comments()
 
     def update_comment(self, identifier, content):
         """

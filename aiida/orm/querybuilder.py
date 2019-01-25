@@ -38,7 +38,7 @@ from aiida.common.exceptions import InputValidationError
 # The way I get column as a an attribute to the orm class
 from aiida.common.links import LinkType
 from aiida.manage import get_manager
-from aiida.orm.node import Node
+from aiida.orm.nodes import Node
 from aiida.common.exceptions import ConfigurationError
 
 from . import authinfos

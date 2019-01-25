@@ -80,7 +80,7 @@ def load_backend_node_class(type_string):
            return
         elif type_string == 'process.workflow.workfunction':
             return
-        elif type_string == 'process.workflow'
+        elif type_string == 'process.workflow':
             return
         else:
             raise exceptions.MissingPluginError('unknown type string {}'.format(type_string))
