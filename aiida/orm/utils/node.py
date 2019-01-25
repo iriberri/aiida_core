@@ -52,6 +52,63 @@ def load_node_class(type_string):
     raise exceptions.MissingPluginError('unknown type string {}'.format(type_string))
 
 
+def load_backend_node_class(type_string):
+    """
+    Return the backend `Node` sub class that corresponds to the given type string.
+
+    :param type_string: the `type` string of the node
+    :return: a sub class of `Node`
+    """
+    from aiida.orm.data import Data
+    from aiida.plugins.entry_point import load_entry_point
+
+    # Get the second element of type_string
+    base_branch = type_string.rsplit('.')[1]
+  
+    if base_branch == 'calculation' :
+        if type_string == 'process.calculation.calcfunction':
+           from orm.implementation.nodes.process.calculation.calcfunction import calcfunction
+           return calcfunction
+        elif type_string == 'process.calculation.calcjob':
+            return
+        elif type_string == 'process.calculation':
+            return
+        else:
+            raise exceptions.MissingPluginError('unknown type string {}'.format(type_string))
+    elif base_branch == 'workflow' :
+        if type_string == 'process.workflow.workchain':
+           return
+        elif type_string == 'process.workflow.workfunction':
+            return
+        elif type_string == 'process.workflow'
+            return
+        else:
+            raise exceptions.MissingPluginError('unknown type string {}'.format(type_string))
+    else:
+        raise exceptions.MissingPluginError('unknown type string {}'.format(type_string))
+
+
+
+
+    #if base_path == 'data':
+    #    return Data
+
+    # Data nodes are the only ones with sub classes that are still external, so if the plugin is not available
+    # we fall back on the base node type
+    if base_path.startswith('data.'):
+        entry_point_name = strip_prefix(base_path, 'data.')
+        try:
+            return load_entry_point('aiida.data', entry_point_name)
+        except exceptions.MissingEntryPointError:
+            return Data
+
+    if base_path.startswith('node.'):
+        entry_point_name = strip_prefix(base_path, 'node.')
+        return load_entry_point('aiida.node', entry_point_name)
+
+    raise exceptions.MissingPluginError('unknown type string {}'.format(type_string))
+
+
 def get_type_string_from_class(class_module, class_name):
     """
     Given the module and name of a class, determine the orm_class_type string, which codifies the
