@@ -3,7 +3,6 @@
 [![Docs status](https://readthedocs.org/projects/aiida-core/badge)](http://aiida-core.readthedocs.io/)
 [![PyPI version](https://badge.fury.io/py/aiida-core.svg)](https://badge.fury.io/py/aiida-core)
 
-
 AiiDA
 =====
 
