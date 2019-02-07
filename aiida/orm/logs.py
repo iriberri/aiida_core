@@ -61,6 +61,10 @@ class Log(entities.Entity):
             # Get rid of the exc info because this is usually not serializable
             metadata['exc_info'] = None
 
+            # Args can contain `functools.partial` objects with are not serializable
+            if 'args' in metadata:
+                metadata['args'] = None
+
             return Log(
                 time=timezone.make_aware(datetime.fromtimestamp(record.created)),
                 loggername=record.name,

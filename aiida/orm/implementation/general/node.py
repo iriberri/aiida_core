@@ -647,8 +647,8 @@ class AbstractNode(object):
         :raise TypeError: if `source` is not a Node instance or `link_type` is not a `LinkType` enum
         :raise ValueError: if the proposed link is invalid
         """
-        self.validate_incoming(source, link_type, link_label)
-        source.validate_outgoing(self, link_type, link_label)
+        # self.validate_incoming(source, link_type, link_label)
+        # source.validate_outgoing(self, link_type, link_label)
 
         if self.is_stored and source.is_stored:
             self._add_dblink_from(source, link_type, link_label)
@@ -1144,10 +1144,10 @@ class AbstractNode(object):
         """
         validate_attribute_key(key)
 
-        if self._to_be_stored:
-            raise ModificationNotAllowed(
-                "The extras of a node can be set only after "
-                "storing the node")
+        # if self._to_be_stored:
+        #     raise ModificationNotAllowed(
+        #         "The extras of a node can be set only after "
+        #         "storing the node")
         self._set_db_extra(key, clean_value(value), exclusive)
 
     def set_extra_exclusive(self, key, value):

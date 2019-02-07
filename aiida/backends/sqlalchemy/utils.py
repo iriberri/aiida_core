@@ -68,7 +68,7 @@ def recreate_after_fork(engine):
     to use independent sessions in the forked process.
     """
     sa.engine.dispose()
-    sa.scopedsessionclass = scoped_session(sessionmaker(bind=sa.engine, expire_on_commit=True))
+    sa.scopedsessionclass = scoped_session(sessionmaker(bind=sa.engine, expire_on_commit=False))
 
 
 def reset_session(config):
@@ -89,7 +89,7 @@ def reset_session(config):
     sa.engine = create_engine(engine_url, json_serializer=dumps_json,
                               json_deserializer=loads_json, encoding='utf-8')
     sa.scopedsessionclass = scoped_session(sessionmaker(bind=sa.engine,
-                                                        expire_on_commit=True))
+                                                        expire_on_commit=False))
     register_after_fork(sa.engine, recreate_after_fork)
 
 

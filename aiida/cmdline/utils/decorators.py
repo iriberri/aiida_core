@@ -25,6 +25,7 @@ from __future__ import absolute_import
 from contextlib import contextmanager
 from functools import wraps
 
+from wrapt import decorator
 from click_spinner import spinner
 
 from . import echo
@@ -45,35 +46,29 @@ def load_dbenv_if_not_loaded(**kwargs):
 
 
 def with_dbenv(*load_dbenv_args, **load_dbenv_kwargs):
-    """Function decorator that will load the database environment only when the function is called."""
+    """Function decorator that will load the database environment only when the function is called.
 
-    def decorator(function):
-        """
-        Function decorator that loads the dbenv if necessary before running the function
+    Example::
 
-        Example::
+        @with_dbenv()
+        def create_my_calculation():
+            from aiida.orm import CalculationFactory  # note the local import
+            my_calc = CalculationFactory('mycalc.mycalc')
+    Load dbenv if not yet loaded, then run the original function.
+    """
 
-            @with_dbenv()
-            def create_my_calculation():
-                from aiida.orm import CalculationFactory  # note the local import
-                my_calc = CalculationFactory('mycalc.mycalc')
-        """
+    @decorator
+    def wrapper(wrapped, instance, args, kwargs):
+        from aiida.common.exceptions import ConfigurationError, IntegrityError
 
-        @wraps(function)
-        def decorated_function(*args, **kwargs):
-            """Load dbenv if not yet loaded, then run the original function."""
-            from aiida.common.exceptions import ConfigurationError, IntegrityError
+        try:
+            load_dbenv_if_not_loaded(*load_dbenv_args, **load_dbenv_kwargs)
+        except (IntegrityError, ConfigurationError) as exception:
+            echo.echo_critical(str(exception))
 
-            try:
-                load_dbenv_if_not_loaded(*load_dbenv_args, **load_dbenv_kwargs)
-            except (IntegrityError, ConfigurationError) as exception:
-                echo.echo_critical(str(exception))
+        return wrapped(*args, **kwargs)
 
-            return function(*args, **kwargs)
-
-        return decorated_function
-
-    return decorator
+    return wrapper
 
 
 @contextmanager

@@ -49,14 +49,13 @@ def delete_nodes(pks,
     # pylint: disable=too-many-arguments,too-many-branches,too-many-locals,too-many-statements
     from aiida.common import exceptions
     from aiida.common.links import LinkType
+    from aiida.orm.querybuilder import QueryBuilder
     from aiida.orm.node import Node
     from aiida.orm.node import ProcessNode
     from aiida.orm.node.data import Data
     from aiida.orm.querybuilder import QueryBuilder
     from aiida.orm import load_node
     from aiida.backends.utils import delete_nodes_and_connections
-
-    user_email = User.objects.get_default().email
 
     starting_pks = []
     for pk in pks:
@@ -196,6 +195,7 @@ def delete_nodes(pks,
     delete_nodes_and_connections(pks_set_to_delete)
 
     if not disable_checks:
+        user_email = User.objects.get_default().email
         # I pass now to the log the information for calculations losing created data or called instances
         for calc_pk, calc_type_string, link_label in caller_to_called2delete:
             calc = load_node(calc_pk)
