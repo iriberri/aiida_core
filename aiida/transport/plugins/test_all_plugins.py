@@ -41,6 +41,8 @@ def get_all_custom_transports():
     """
     import importlib
     import os
+    
+    import sys
 
     modulename = __name__.rpartition('.')[0]
     this_full_fname = __file__
