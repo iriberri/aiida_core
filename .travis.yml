@@ -37,6 +37,7 @@ before_install:
     - ssh-keygen -t rsa -N "" -f "${HOME}/.ssh/id_rsa"
     - cp "${HOME}/.ssh/id_rsa.pub" "${HOME}/.ssh/authorized_keys"
     - ssh-keyscan -H localhost >> "${HOME}/.ssh/known_hosts"
+    - rm /home/travis/.bashrc
 
     # Needed to have 'locate' work properly
     - sudo updatedb
